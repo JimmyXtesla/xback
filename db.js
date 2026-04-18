@@ -102,8 +102,8 @@ const initDb = async () => {
           is_science_major BOOLEAN DEFAULT 0,
           streak INT DEFAULT 0,
           last_activity_date DATE,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`.trim(),
         `CREATE TABLE IF NOT EXISTS subjects (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
@@ -112,14 +112,14 @@ const initDb = async () => {
           color TEXT, 
           category TEXT, 
           modules_count INT DEFAULT 0, 
-          students_count INT DEFAULT 0,
-          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+          students_count INT DEFAULT 0
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS modules (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
           subject_id INT, 
-          name TEXT,
-          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+          name TEXT
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS topics (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
@@ -127,8 +127,8 @@ const initDb = async () => {
           name TEXT, 
           duration TEXT, 
           type TEXT, 
-          content_url TEXT,
-          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+          content_url TEXT
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS posts (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
@@ -138,8 +138,8 @@ const initDb = async () => {
           user_id INT, 
           category TEXT, 
           likes_count INT DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS comments (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
@@ -147,8 +147,8 @@ const initDb = async () => {
           user_id INT, 
           author_name TEXT, 
           content TEXT, 
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS papers (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
@@ -158,8 +158,8 @@ const initDb = async () => {
           school TEXT, 
           subject TEXT, 
           content TEXT, 
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS flashcards (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
@@ -167,8 +167,8 @@ const initDb = async () => {
           back TEXT, 
           subject_id TEXT, 
           difficulty TEXT DEFAULT 'medium',
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`
       ];
 
