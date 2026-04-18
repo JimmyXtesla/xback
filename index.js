@@ -13,6 +13,13 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
+// Initialize DB
+initDb().then(() => {
+  console.log('Database sync complete');
+}).catch(err => {
+  console.error('Database sync failed:', err);
+});
+
 // Security Middleware
 app.use(helmet());
 app.use(cors());
@@ -807,10 +814,8 @@ app.use(errorHandler);
 
 // Only listen if not being imported as a module (e.g. for Vercel)
 if (require.main === module) {
-  initDb().then(() => {
-    app.listen(PORT, () => {
-      console.log(`Backend server running on http://localhost:${PORT}`);
-    });
+  app.listen(PORT, () => {
+    console.log(`Backend server running on http://localhost:${PORT}`);
   });
 }
 
