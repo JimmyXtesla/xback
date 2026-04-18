@@ -160,6 +160,15 @@ const initDb = async () => {
           content TEXT, 
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS flashcards (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          front TEXT, 
+          back TEXT, 
+          subject_id TEXT, 
+          difficulty TEXT DEFAULT 'medium',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
         )`
       ];
 
