@@ -100,9 +100,11 @@ const initDb = async () => {
           study_hours INT DEFAULT 0,
           completed_lessons INT DEFAULT 0,
           is_science_major BOOLEAN DEFAULT 0,
+          streak INT DEFAULT 0,
+          last_activity_date DATE,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
-        )`,
+        )`.trim(),
         `CREATE TABLE IF NOT EXISTS subjects (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
           name TEXT, 
@@ -173,7 +175,9 @@ const initDb = async () => {
           "ALTER TABLE posts ADD COLUMN IF NOT EXISTS category TEXT",
           "ALTER TABLE posts ADD COLUMN IF NOT EXISTS likes_count INT DEFAULT 0",
           "ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INT",
-          "ALTER TABLE comments ADD COLUMN IF NOT EXISTS author_name TEXT"
+          "ALTER TABLE comments ADD COLUMN IF NOT EXISTS author_name TEXT",
+          "ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INT DEFAULT 0",
+          "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_date DATE"
         ];
         // Note: IF NOT EXISTS for columns is MariaDB/MySQL 8.0.19+. 
         // For older MySQL, we try and ignore errors if column exists.
