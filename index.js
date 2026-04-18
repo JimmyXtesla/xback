@@ -674,6 +674,14 @@ app.post('/api/forum/posts', authenticateToken, (req, res) => {
     });
 });
 
+app.post('/api/forum/posts/:id/like', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.run("UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?", [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, message: "Post liked" });
+  });
+});
+
 app.get('/api/forum/posts/:id/comments', (req, res) => {
   const { id } = req.params;
   db.all("SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC", [id], (err, rows) => {
