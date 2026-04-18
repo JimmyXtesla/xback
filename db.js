@@ -135,6 +135,7 @@ const initDb = async () => {
           author_name TEXT, 
           user_id INT, 
           category TEXT, 
+          likes_count INT DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
         )`,
@@ -170,6 +171,7 @@ const initDb = async () => {
           "ALTER TABLE posts ADD COLUMN IF NOT EXISTS user_id INT",
           "ALTER TABLE posts ADD COLUMN IF NOT EXISTS author_name TEXT",
           "ALTER TABLE posts ADD COLUMN IF NOT EXISTS category TEXT",
+          "ALTER TABLE posts ADD COLUMN IF NOT EXISTS likes_count INT DEFAULT 0",
           "ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INT",
           "ALTER TABLE comments ADD COLUMN IF NOT EXISTS author_name TEXT"
         ];
