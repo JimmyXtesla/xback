@@ -17,7 +17,7 @@ if (DB_TYPE === 'mysql') {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'slide',
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: 100,
     queueLimit: 0
   });
 
@@ -88,15 +88,15 @@ const initDb = async () => {
       const tables = [
         `CREATE TABLE IF NOT EXISTS users (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
-          name TEXT, 
+          name VARCHAR(255), 
           email VARCHAR(255) UNIQUE, 
           password TEXT, 
-          role TEXT, 
+          role VARCHAR(50), 
           xp INT DEFAULT 0, 
           level INT DEFAULT 1, 
-          school TEXT,
-          class TEXT,
-          location TEXT,
+          school VARCHAR(255),
+          class VARCHAR(100),
+          location VARCHAR(255),
           study_hours INT DEFAULT 0,
           completed_lessons INT DEFAULT 0,
           is_science_major BOOLEAN DEFAULT 0,
@@ -107,10 +107,10 @@ const initDb = async () => {
         )`.trim(),
         `CREATE TABLE IF NOT EXISTS subjects (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
-          name TEXT, 
-          icon TEXT, 
-          color TEXT, 
-          category TEXT, 
+          name VARCHAR(255), 
+          icon VARCHAR(100), 
+          color VARCHAR(50), 
+          category VARCHAR(100), 
           modules_count INT DEFAULT 0, 
           students_count INT DEFAULT 0
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
@@ -118,25 +118,25 @@ const initDb = async () => {
         `CREATE TABLE IF NOT EXISTS modules (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
           subject_id INT, 
-          name TEXT
+          name VARCHAR(255)
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS topics (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
           module_id INT, 
-          name TEXT, 
-          duration TEXT, 
-          type TEXT, 
+          name VARCHAR(255), 
+          duration VARCHAR(50), 
+          type VARCHAR(50), 
           content_url TEXT
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS posts (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
-          title TEXT, 
+          title VARCHAR(255), 
           content TEXT, 
-          author_name TEXT, 
+          author_name VARCHAR(255), 
           user_id INT, 
-          category TEXT, 
+          category VARCHAR(100), 
           likes_count INT DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
@@ -145,18 +145,18 @@ const initDb = async () => {
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
           post_id INT, 
           user_id INT, 
-          author_name TEXT, 
+          author_name VARCHAR(255), 
           content TEXT, 
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
         `CREATE TABLE IF NOT EXISTS papers (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
-          title TEXT NOT NULL, 
-          year TEXT, 
-          type TEXT, 
-          school TEXT, 
-          subject TEXT, 
+          title VARCHAR(255) NOT NULL, 
+          year VARCHAR(20), 
+          type VARCHAR(100), 
+          school VARCHAR(255), 
+          subject VARCHAR(255), 
           content TEXT, 
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
@@ -165,15 +165,42 @@ const initDb = async () => {
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
           front TEXT, 
           back TEXT, 
-          subject_id TEXT, 
-          difficulty TEXT DEFAULT 'medium',
+          subject_id VARCHAR(100), 
+          difficulty VARCHAR(50) DEFAULT 'medium',
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS progress (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          user_id INT,
+          topic_id INT,
+          completed BOOLEAN DEFAULT 0,
+          score INT DEFAULT 0,
+          last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`
       ];
 
       for (const sql of tables) {
         await runQuery(sql);
+      }
+
+      // Create Indexes for Performance
+      const indexQueries = [
+        `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
+        `CREATE INDEX IF NOT EXISTS idx_progress_user_topic ON progress(user_id, topic_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_modules_subject_id ON modules(subject_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_topics_module_id ON topics(module_id)`
+      ];
+
+      for (const sql of indexQueries) {
+        try {
+          await runQuery(DB_TYPE === 'mysql' ? sql.replace('IF NOT EXISTS ', '') : sql);
+        } catch (e) {
+          // Ignore error if index already exists in MySQL
+        }
       }
 
       // Add missing columns if they don't exist (MySQL specific self-healing)
