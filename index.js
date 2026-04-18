@@ -172,19 +172,27 @@ app.post('/api/auth/register', [
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, school, class: userClass, location } = req.body;
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    db.run("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-      [name, email, hashedPassword, role || 'student'], function (err) {
+    db.run("INSERT INTO users (name, email, password, role, school, class, location) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [name, email, hashedPassword, role || 'student', school || '', userClass || '', location || ''], function (err) {
         if (err) {
           if (err.message.includes('UNIQUE constraint failed')) {
             return res.status(400).json({ error: "Email already exists" });
           }
           return res.status(500).json({ error: err.message });
         }
-        res.status(201).json({ id: this.lastID, name, email, role: role || 'student' });
+        res.status(201).json({ 
+          id: this.lastID, 
+          name, 
+          email, 
+          role: role || 'student',
+          school: school || '',
+          class: userClass || '',
+          location: location || ''
+        });
       });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -214,13 +222,38 @@ app.post('/api/auth/login', [
 
     // Remove password from user object
     delete user.password;
+    
+    // Add additional info for store if missing
+    user.school = user.school || '';
+    user.class = user.class || '';
+    user.location = user.location || '';
+    
     res.json({ token, user });
   });
 });
 
+// Profile Update (Protected)
+app.post('/api/auth/update-profile', authenticateToken, (req, res) => {
+  const { school, class: userClass, location, is_science_major } = req.body;
+  const userId = req.user.id;
+
+  db.run(`UPDATE users SET 
+          school = ?, 
+          class = ?, 
+          location = ?, 
+          is_science_major = ? 
+          WHERE id = ?`,
+    [school, userClass, location, is_science_major ? 1 : 0, userId],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
+
 // Profile (Protected)
 app.get('/api/auth/profile', authenticateToken, (req, res) => {
-  db.get("SELECT id, name, email, role, xp, level FROM users WHERE id = ?", [req.user.id], (err, user) => {
+  db.get("SELECT id, name, email, role, xp, level, school, class, location, study_hours, completed_lessons, is_science_major FROM users WHERE id = ?", [req.user.id], (err, user) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(user);
   });
