@@ -209,22 +209,25 @@ const initDb = async () => {
         }
       }
 
-      // Add missing columns if they don't exist (MySQL specific self-healing)
-      if (DB_TYPE === 'mysql') {
-        const migrations = [
-          "ALTER TABLE posts ADD COLUMN IF NOT EXISTS user_id INT",
-          "ALTER TABLE posts ADD COLUMN IF NOT EXISTS author_name TEXT",
-          "ALTER TABLE posts ADD COLUMN IF NOT EXISTS category TEXT",
-          "ALTER TABLE posts ADD COLUMN IF NOT EXISTS likes_count INT DEFAULT 0",
-          "ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INT",
-          "ALTER TABLE comments ADD COLUMN IF NOT EXISTS author_name TEXT",
-          "ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INT DEFAULT 0",
-          "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_date DATE"
-        ];
-        // Note: IF NOT EXISTS for columns is MariaDB/MySQL 8.0.19+. 
-        // For older MySQL, we try and ignore errors if column exists.
-        for (const sql of migrations) {
-           try { await runQuery(sql.replace('IF NOT EXISTS ', '')); } catch(e) { /* ignore existing column */ }
+      // Add missing columns if they don't exist (Self-healing migrations)
+      const migrations = [
+        "ALTER TABLE posts ADD COLUMN user_id INT",
+        "ALTER TABLE posts ADD COLUMN author_name VARCHAR(255)",
+        "ALTER TABLE posts ADD COLUMN category VARCHAR(100)",
+        "ALTER TABLE posts ADD COLUMN likes_count INT DEFAULT 0",
+        "ALTER TABLE posts ADD COLUMN views_count INT DEFAULT 0",
+        "ALTER TABLE comments ADD COLUMN user_id INT",
+        "ALTER TABLE comments ADD COLUMN author_name VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN streak INT DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN last_activity_date DATE"
+      ];
+
+      for (const sql of migrations) {
+        try {
+          // Standard compatibility: try to add column, catch error if already exists
+          await runQuery(sql);
+        } catch (e) {
+          // Ignore "duplicate column" errors
         }
       }
 
