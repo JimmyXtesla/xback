@@ -266,6 +266,54 @@ app.get('/api/progress/:userId/subject/:subjectId', (req, res) => {
   });
 });
 
+// 8. Papers CRUD
+app.get('/api/papers', (req, res) => {
+  db.all("SELECT * FROM papers ORDER BY year DESC, id DESC", [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/papers/:id', (req, res) => {
+  db.get("SELECT * FROM papers WHERE id = ?", [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: "Paper not found" });
+    res.json(row);
+  });
+});
+
+app.post('/api/papers', authenticateToken, (req, res) => {
+  const { title, year, type, school, subject, content } = req.body;
+  if (!title || !content) return res.status(400).json({ error: "Title and content are required" });
+  db.run(
+    "INSERT INTO papers (title, year, type, school, subject, content) VALUES (?, ?, ?, ?, ?, ?)",
+    [title, year || '', type || 'National', school || '', subject || '', content],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID, title, year, type, school, subject });
+    }
+  );
+});
+
+app.put('/api/papers/:id', authenticateToken, (req, res) => {
+  const { title, year, type, school, subject, content } = req.body;
+  db.run(
+    "UPDATE papers SET title = ?, year = ?, type = ?, school = ?, subject = ?, content = ? WHERE id = ?",
+    [title, year, type, school, subject, content, req.params.id],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, changes: this.changes });
+    }
+  );
+});
+
+app.delete('/api/papers/:id', authenticateToken, (req, res) => {
+  db.run("DELETE FROM papers WHERE id = ?", [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, changes: this.changes });
+  });
+});
+
 // --- Auth Endpoints ---
 
 // Register
