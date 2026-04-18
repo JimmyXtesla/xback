@@ -138,8 +138,14 @@ const initDb = async () => {
           user_id INT, 
           category VARCHAR(100), 
           likes_count INT DEFAULT 0,
+          views_count INT DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS post_likes (
+          user_id INT,
+          post_id INT,
+          PRIMARY KEY (user_id, post_id)
         )`,
         `CREATE TABLE IF NOT EXISTS comments (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
