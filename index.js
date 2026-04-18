@@ -149,6 +149,21 @@ app.get('/api/papers', (req, res) => {
 });
 
 
+// 9. User Achievements
+app.get('/api/users/:id/achievements', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const query = `
+    SELECT a.*, ua.unlocked_at 
+    FROM achievements a
+    JOIN user_achievements ua ON a.id = ua.achievement_id
+    WHERE ua.user_id = ?
+  `;
+  db.all(query, [id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 // 5. Dashboard Stats (Admin view)
 app.get('/api/admin/stats', (req, res) => {
   const stats = {
