@@ -85,7 +85,22 @@ const initDb = async () => {
     const setup = async () => {
       // Create tables for SQLite if needed (MySQL handled by script)
       if (DB_TYPE === 'sqlite') {
-        await runQuery(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT UNIQUE, password TEXT, role TEXT DEFAULT 'student', xp INTEGER DEFAULT 0, level INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+        await runQuery(`CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, 
+          name TEXT, 
+          email TEXT UNIQUE, 
+          password TEXT, 
+          role TEXT DEFAULT 'student', 
+          xp INTEGER DEFAULT 0, 
+          level INTEGER DEFAULT 1, 
+          school TEXT,
+          class TEXT,
+          location TEXT,
+          study_hours INTEGER DEFAULT 0,
+          completed_lessons INTEGER DEFAULT 0,
+          is_science_major BOOLEAN DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
         await runQuery(`CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, icon TEXT, color TEXT, modules_count INTEGER DEFAULT 0, students_count INTEGER DEFAULT 0)`);
         await runQuery(`CREATE TABLE IF NOT EXISTS modules (id INTEGER PRIMARY KEY AUTOINCREMENT, subject_id INTEGER, name TEXT)`);
         await runQuery(`CREATE TABLE IF NOT EXISTS topics (id INTEGER PRIMARY KEY AUTOINCREMENT, module_id INTEGER, name TEXT, duration TEXT, type TEXT, content_url TEXT)`);
