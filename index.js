@@ -101,10 +101,15 @@ const updateStreak = (userId) => {
 // 1. Subjects
 app.get('/api/subjects', (req, res) => {
   const query = `
-    SELECT s.*, 
-    (SELECT COUNT(*) FROM modules m WHERE m.subject_id = s.id) as modules_count,
-    (SELECT COUNT(DISTINCT user_id) FROM progress p JOIN topics t ON p.topic_id = t.id JOIN modules m ON t.module_id = m.id WHERE m.subject_id = s.id) as students_count
+    SELECT 
+      s.*, 
+      COUNT(DISTINCT m.id) as modules_count,
+      COUNT(DISTINCT p.user_id) as students_count
     FROM subjects s
+    LEFT JOIN modules m ON s.id = m.subject_id
+    LEFT JOIN topics t ON m.id = t.module_id
+    LEFT JOIN progress p ON t.id = p.topic_id
+    GROUP BY s.id
   `;
   db.all(query, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -164,7 +169,10 @@ app.get('/api/search', (req, res) => {
 
 // 6. Leaderboard
 app.get('/api/leaderboard', (req, res) => {
-  db.all("SELECT id, name, xp, level FROM users ORDER BY xp DESC LIMIT 20", [], (err, rows) => {
+  const limit = parseInt(req.query.limit) || 20;
+  const offset = parseInt(req.query.offset) || 0;
+
+  db.all("SELECT id, name, xp, level FROM users ORDER BY xp DESC LIMIT ? OFFSET ?", [limit, offset], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -623,13 +631,7 @@ app.get('/api/activity', (req, res) => {
 
 // --- APP ENDPOINTS ---
 
-// 18. Leaderboard
-app.get('/api/leaderboard', (req, res) => {
-  db.all("SELECT id, name, xp, level, role FROM users ORDER BY xp DESC LIMIT 20", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
+
 
 // 19. Quiz Questions
 app.get('/api/topics/:id/questions', (req, res) => {
@@ -703,7 +705,22 @@ app.post('/api/users/:id/mistakes', authenticateToken, (req, res) => {
 
 // 21. Forum
 app.get('/api/forum/posts', (req, res) => {
-  db.all("SELECT * FROM posts ORDER BY created_at DESC", [], (err, rows) => {
+  const limit = parseInt(req.query.limit) || 50;
+  const offset = parseInt(req.query.offset) || 0;
+  const category = req.query.category;
+
+  let query = "SELECT * FROM posts ";
+  let params = [];
+
+  if (category && category !== 'All') {
+    query += "WHERE category = ? ";
+    params.push(category);
+  }
+
+  query += "ORDER BY created_at DESC LIMIT ? OFFSET ?";
+  params.push(limit, offset);
+
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
