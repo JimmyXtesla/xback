@@ -210,17 +210,28 @@ app.post('/api/progress', (req, res) => {
 
   // Note: SQLite doesn't support ON CONFLICT without UNIQUE constraint. 
   // For simplicity here, let's just insert or check existence first.
-  db.get("SELECT id FROM progress WHERE user_id = ? AND topic_id = ?", [user_id, topic_id], (err, row) => {
+  db.get("SELECT id, completed FROM progress WHERE user_id = ? AND topic_id = ?", [user_id, topic_id], (err, row) => {
     if (row) {
+      const previouslyCompleted = row.completed;
       db.run("UPDATE progress SET completed = ?, score = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [completed, score, row.id], (err) => {
           if (err) return res.status(500).json({ error: err.message });
+          
+          // Update User XP if newly completed
+          if (completed && !previouslyCompleted) {
+            db.run("UPDATE users SET xp = xp + 50, completed_lessons = completed_lessons + 1 WHERE id = ?", [user_id]);
+          }
           res.json({ success: true, message: "Progress updated" });
         });
     } else {
       db.run("INSERT INTO progress (user_id, topic_id, completed, score) VALUES (?, ?, ?, ?)",
         [user_id, topic_id, completed, score], (err) => {
           if (err) return res.status(500).json({ error: err.message });
+          
+          // Update User XP if completed
+          if (completed) {
+            db.run("UPDATE users SET xp = xp + 50, completed_lessons = completed_lessons + 1 WHERE id = ?", [user_id]);
+          }
           res.json({ success: true, message: "Progress created" });
         });
     }
