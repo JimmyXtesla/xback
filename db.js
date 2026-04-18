@@ -101,7 +101,7 @@ const initDb = async () => {
           is_science_major BOOLEAN DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, icon TEXT, color TEXT, modules_count INTEGER DEFAULT 0, students_count INTEGER DEFAULT 0)`);
+        await runQuery(`CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, icon TEXT, color TEXT, category TEXT DEFAULT 'Science', modules_count INTEGER DEFAULT 0, students_count INTEGER DEFAULT 0)`);
         await runQuery(`CREATE TABLE IF NOT EXISTS modules (id INTEGER PRIMARY KEY AUTOINCREMENT, subject_id INTEGER, name TEXT)`);
         await runQuery(`CREATE TABLE IF NOT EXISTS topics (id INTEGER PRIMARY KEY AUTOINCREMENT, module_id INTEGER, name TEXT, duration TEXT, type TEXT, content_url TEXT)`);
         await runQuery(`CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, topic_id INTEGER, completed BOOLEAN, score INTEGER, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, topic_id))`);
@@ -112,6 +112,7 @@ const initDb = async () => {
         await runQuery(`CREATE TABLE IF NOT EXISTS user_achievements (user_id INTEGER, achievement_id INTEGER, unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, achievement_id))`);
         await runQuery(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
         await runQuery(`CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id TEXT UNIQUE, user_name TEXT, plan TEXT, amount TEXT, status TEXT, type TEXT, created_at DATETIME)`);
+        await runQuery(`CREATE TABLE IF NOT EXISTS papers (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, year TEXT, type TEXT DEFAULT 'National', school TEXT, subject TEXT, content TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
       }
 
       // Check Admin
