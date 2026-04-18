@@ -97,6 +97,57 @@ app.get('/api/users', (req, res) => {
     res.json(rows);
   });
 });
+// 5. Global Search
+app.get('/api/search', (req, res) => {
+  const queryText = req.query.q;
+  if (!queryText) return res.json([]);
+
+  const searchQuery = `%${queryText}%`;
+
+  // Search across subjects, topics, and posts
+  const results = [];
+
+  db.all("SELECT id, name as title, 'subject' as type, 'Subject' as subtitle FROM subjects WHERE name LIKE ?", [searchQuery], (err, subjects) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    db.all("SELECT t.id, t.name as title, 'topic' as type, s.name as subtitle, t.module_id FROM topics t JOIN modules m ON t.module_id = m.id JOIN subjects s ON m.subject_id = s.id WHERE t.name LIKE ?", [searchQuery], (err, topics) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      db.all("SELECT id, title, 'forum' as type, author as subtitle FROM posts WHERE title LIKE ? OR content LIKE ?", [searchQuery, searchQuery], (err, posts) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        res.json([...subjects, ...topics, ...posts]);
+      });
+    });
+  });
+});
+
+// 6. Leaderboard
+app.get('/api/leaderboard', (req, res) => {
+  db.all("SELECT id, name, xp, level FROM users ORDER BY xp DESC LIMIT 20", [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// 7. Notifications (Mock for now but connected)
+app.get('/api/notifications', authenticateToken, (req, res) => {
+  // In a real app, this would be a table. For now, returning system notifications.
+  const notifications = [
+    { id: 1, title: 'Welcome to SLIDE!', message: 'Start your learning journey today.', type: 'info', created_at: new Date() },
+    { id: 2, title: 'XP Earned', message: 'You earned 50 XP for completing your first lesson!', type: 'success', created_at: new Date() }
+  ];
+  res.json(notifications);
+});
+
+// 8. Past Papers
+app.get('/api/papers', (req, res) => {
+  db.all("SELECT * FROM papers ORDER BY year DESC", [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 
 // 5. Dashboard Stats (Admin view)
 app.get('/api/admin/stats', (req, res) => {
