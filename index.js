@@ -56,6 +56,40 @@ const errorHandler = (err, req, res, next) => {
 // Initial database setup check moved to start script or conditional block
 
 
+// --- Streak Management ---
+const updateStreak = (userId) => {
+  const today = new Date().toISOString().split('T')[0];
+  db.get("SELECT streak, last_activity_date FROM users WHERE id = ?", [userId], (err, user) => {
+    if (err || !user) return;
+
+    let newStreak = user.streak || 0;
+    const lastDate = user.last_activity_date;
+
+    if (!lastDate) {
+      newStreak = 1;
+    } else {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      if (lastDate === today) {
+        // Already updated today
+        return;
+      } else if (lastDate === yesterdayStr) {
+        newStreak += 1;
+      } else {
+        // Missed one or more days
+        newStreak = 1;
+      }
+    }
+
+    db.run("UPDATE users SET streak = ?, last_activity_date = ? WHERE id = ?", [newStreak, today, userId], (err) => {
+      if (err) console.error(`[STREAK] Failed to update for user ${userId}:`, err.message);
+      else console.log(`[STREAK] User ${userId} streak updated to ${newStreak}`);
+    });
+  });
+};
+
 // --- API Routes ---
 
 // 1. Subjects
@@ -227,6 +261,10 @@ app.post('/api/progress', (req, res) => {
                 else console.log(`[XP] +50 XP granted to user ${user_id}`);
               });
           }
+          
+          // Update streak on every progress update
+          updateStreak(user_id);
+          
           res.json({ success: true, message: "Progress updated" });
         });
     } else {
@@ -241,6 +279,10 @@ app.post('/api/progress', (req, res) => {
                 else console.log(`[XP] +50 XP granted to user ${user_id}`);
               });
           }
+          
+          // Update streak on new progress
+          updateStreak(user_id);
+          
           res.json({ success: true, message: "Progress created" });
         });
     }
@@ -385,6 +427,9 @@ app.post('/api/auth/login', [
     user.class = user.class || '';
     user.location = user.location || '';
     
+    // Trigger streak update on login
+    updateStreak(user.id);
+    
     res.json({ token, user });
   });
 });
@@ -410,7 +455,7 @@ app.post('/api/auth/update-profile', authenticateToken, (req, res) => {
 
 // Profile (Protected)
 app.get('/api/auth/profile', authenticateToken, (req, res) => {
-  db.get("SELECT id, name, email, role, xp, level, school, class, location, study_hours, completed_lessons, is_science_major FROM users WHERE id = ?", [req.user.id], (err, user) => {
+  db.get("SELECT id, name, email, role, xp, level, school, class, location, study_hours, completed_lessons, is_science_major, streak, last_activity_date FROM users WHERE id = ?", [req.user.id], (err, user) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(user);
   });
