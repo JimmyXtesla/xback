@@ -201,40 +201,68 @@ app.post('/api/progress', (req, res) => {
     return res.status(400).json({ error: "user_id and topic_id are required" });
   }
 
-  const query = `INSERT INTO progress (user_id, topic_id, completed, score) 
-                 VALUES (?, ?, ?, ?)
-                 ON CONFLICT(user_id, topic_id) DO UPDATE SET
-                 completed = excluded.completed,
-                 score = excluded.score,
-                 updated_at = CURRENT_TIMESTAMP`;
+  // Normalise completed to integer for MySQL compatibility
+  const completedInt = completed ? 1 : 0;
+  const scoreInt = parseInt(score) || 0;
 
-  // Note: SQLite doesn't support ON CONFLICT without UNIQUE constraint. 
-  // For simplicity here, let's just insert or check existence first.
+  console.log(`[PROGRESS] user=${user_id} topic=${topic_id} completed=${completedInt} score=${scoreInt}`);
+
   db.get("SELECT id, completed FROM progress WHERE user_id = ? AND topic_id = ?", [user_id, topic_id], (err, row) => {
+    if (err) {
+      console.error("[PROGRESS] Lookup error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+
     if (row) {
-      const previouslyCompleted = row.completed;
-      db.run("UPDATE progress SET completed = ?, score = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [completed, score, row.id], (err) => {
+      const wasCompleted = row.completed === 1 || row.completed === true;
+      db.run("UPDATE progress SET completed = ?, score = ? WHERE id = ?",
+        [completedInt, scoreInt, row.id], (err) => {
           if (err) return res.status(500).json({ error: err.message });
-          
-          // Update User XP if newly completed
-          if (completed && !previouslyCompleted) {
-            db.run("UPDATE users SET xp = xp + 50, completed_lessons = completed_lessons + 1 WHERE id = ?", [user_id]);
+
+          // Grant XP only if this is the first time completing
+          if (completedInt === 1 && !wasCompleted) {
+            db.run("UPDATE users SET xp = xp + 50, completed_lessons = completed_lessons + 1 WHERE id = ?",
+              [user_id], (err) => {
+                if (err) console.error("[XP] Update failed:", err.message);
+                else console.log(`[XP] +50 XP granted to user ${user_id}`);
+              });
           }
           res.json({ success: true, message: "Progress updated" });
         });
     } else {
       db.run("INSERT INTO progress (user_id, topic_id, completed, score) VALUES (?, ?, ?, ?)",
-        [user_id, topic_id, completed, score], (err) => {
+        [user_id, topic_id, completedInt, scoreInt], (err) => {
           if (err) return res.status(500).json({ error: err.message });
-          
-          // Update User XP if completed
-          if (completed) {
-            db.run("UPDATE users SET xp = xp + 50, completed_lessons = completed_lessons + 1 WHERE id = ?", [user_id]);
+
+          if (completedInt === 1) {
+            db.run("UPDATE users SET xp = xp + 50, completed_lessons = completed_lessons + 1 WHERE id = ?",
+              [user_id], (err) => {
+                if (err) console.error("[XP] Update failed:", err.message);
+                else console.log(`[XP] +50 XP granted to user ${user_id}`);
+              });
           }
           res.json({ success: true, message: "Progress created" });
         });
     }
+  });
+});
+
+// 7. Get user progress for a subject (completed topic IDs)
+app.get('/api/progress/:userId/subject/:subjectId', (req, res) => {
+  const { userId, subjectId } = req.params;
+  const query = `
+    SELECT p.topic_id, p.completed, p.score
+    FROM progress p
+    JOIN topics t ON p.topic_id = t.id
+    JOIN modules m ON t.module_id = m.id
+    WHERE p.user_id = ? AND m.subject_id = ? AND p.completed = 1
+  `;
+  db.all(query, [userId, subjectId], (err, rows) => {
+    if (err) {
+      console.error("[PROGRESS GET] Error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
   });
 });
 
