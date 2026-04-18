@@ -371,7 +371,11 @@ app.post('/api/auth/login', [
     console.log(`[DEBUG] Login: ${email}, Match: ${validPassword}`);
     if (!validPassword) return res.status(401).json({ error: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name, role: user.role }, 
+      JWT_SECRET, 
+      { expiresIn: '24h' } // Increased to 24h for smoother experience
+    );
 
     // Remove password from user object
     delete user.password;
@@ -656,9 +660,16 @@ app.get('/api/forum/posts', (req, res) => {
 
 app.post('/api/forum/posts', authenticateToken, (req, res) => {
   const { title, content, category } = req.body;
+  if (!title || !content) return res.status(400).json({ error: "Title and content are required" });
+
+  console.log(`[FORUM] Creating post: "${title}" by ${req.user.name} (${req.user.id})`);
+
   db.run("INSERT INTO posts (user_id, author_name, title, content, category) VALUES (?, ?, ?, ?, ?)",
-    [req.user.id, req.user.name || 'Anonymous', title, content, category], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+    [req.user.id, req.user.name || 'Anonymous', title, content, category || 'General'], function (err) {
+      if (err) {
+        console.error("[FORUM] Database Error:", err.message);
+        return res.status(500).json({ error: err.message });
+      }
       res.json({ id: this.lastID, success: true });
     });
 });
