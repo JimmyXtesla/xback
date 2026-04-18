@@ -6,10 +6,20 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const http = require('http');
+const { Server } = require('socket.io');
 const { body, validationResult } = require('express-validator');
 const { db, initDb } = require('./db');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
@@ -859,13 +869,77 @@ app.delete('/api/flashcards/:id', authenticateToken, (req, res) => {
   });
 });
 
+// --- SOCKET.IO REAL-TIME FEATURES ---
+const studyRooms = {}; // { subjectId: [{ userId, userName, socketId }] }
+const activeBattles = {}; // { battleId: { players: [], questions: [], scores: {} } }
+
+io.on('connection', (socket) => {
+  console.log(`[SOCKET] User connected: ${socket.id}`);
+
+  // 1. Study With Me Rooms
+  socket.on('join_study_room', ({ userId, userName, subjectId }) => {
+    socket.join(`room_${subjectId}`);
+    if (!studyRooms[subjectId]) studyRooms[subjectId] = [];
+    
+    // Remove if already there (stale connection)
+    studyRooms[subjectId] = studyRooms[subjectId].filter(u => u.userId !== userId);
+    studyRooms[subjectId].push({ userId, userName, socketId: socket.id });
+    
+    io.to(`room_${subjectId}`).emit('room_update', studyRooms[subjectId]);
+    console.log(`[ROOM] ${userName} joined room: ${subjectId}`);
+  });
+
+  socket.on('leave_study_room', ({ userId, subjectId }) => {
+    if (studyRooms[subjectId]) {
+      studyRooms[subjectId] = studyRooms[subjectId].filter(u => u.userId !== userId);
+      io.to(`room_${subjectId}`).emit('room_update', studyRooms[subjectId]);
+    }
+    socket.leave(`room_${subjectId}`);
+  });
+
+  // 2. Peer-to-Peer Battles
+  socket.on('challenge_search', ({ userId, userName, subjectId }) => {
+    socket.join(`matching_${subjectId}`);
+    // Simple matchmaking: just broadcast "who wants to play?"
+    socket.to(`matching_${subjectId}`).emit('incoming_challenge', {
+      challengerId: userId,
+      challengerName: userName,
+      subjectId,
+      battleId: `battle_${Date.now()}_${userId}`
+    });
+  });
+
+  socket.on('accept_challenge', ({ battleId, challengerId, acceptorId, acceptorName, subjectId }) => {
+    socket.join(battleId);
+    // Notify challenger
+    io.to(`matching_${subjectId}`).emit('battle_started', {
+      battleId,
+      players: [challengerId, acceptorId],
+      subjectId
+    });
+  });
+
+  socket.on('disconnect', () => {
+    // Cleanup presence
+    for (const rid in studyRooms) {
+      const initialCount = studyRooms[rid].length;
+      studyRooms[rid] = studyRooms[rid].filter(u => u.socketId !== socket.id);
+      if (studyRooms[rid].length !== initialCount) {
+        io.to(`room_${rid}`).emit('room_update', studyRooms[rid]);
+      }
+    }
+    console.log(`[SOCKET] User disconnected: ${socket.id}`);
+  });
+});
+
 // Use Error Handler
 app.use(errorHandler);
 
 // Only listen if not being imported as a module (e.g. for Vercel)
 if (require.main === module) {
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`Backend server running on http://localhost:${PORT}`);
+    console.log(`Socket.io enabled and ready.`);
   });
 }
 
