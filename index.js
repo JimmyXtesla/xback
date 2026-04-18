@@ -163,13 +163,30 @@ app.get('/api/search', (req, res) => {
 });
 
 // 6. Leaderboard
-app.get('/api/leaderboard', (req, res) => {
+app.get('/api/leaderboard', authenticateToken, (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
   const offset = parseInt(req.query.offset) || 0;
+  const userId = req.user.id;
 
-  db.all("SELECT id, name, xp, level FROM users ORDER BY xp DESC LIMIT ? OFFSET ?", [limit, offset], (err, rows) => {
+  // Query 1: Get top leaderboard
+  db.all("SELECT id, name, xp, level, role FROM users ORDER BY xp DESC, name ASC LIMIT ? OFFSET ?", [limit, offset], (err, topUsers) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+
+    // Query 2: Get specific user's rank
+    const rankQuery = `
+      SELECT COUNT(*) + 1 as rank 
+      FROM users 
+      WHERE xp > (SELECT xp FROM users WHERE id = ?)
+      OR (xp = (SELECT xp FROM users WHERE id = ?) AND name < (SELECT name FROM users WHERE id = ?))
+    `;
+    
+    db.get(rankQuery, [userId, userId, userId], (err, rankRow) => {
+      const userRank = rankRow ? rankRow.rank : 0;
+      res.json({
+        topScholars: topUsers,
+        userRank: userRank
+      });
+    });
   });
 });
 
