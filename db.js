@@ -84,35 +84,100 @@ const initDb = async () => {
 
     const setup = async () => {
       // Create tables for SQLite if needed (MySQL handled by script)
-      if (DB_TYPE === 'sqlite') {
-        await runQuery(`CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT, 
+      // Create tables for BOTH SQLite and MySQL if needed
+      const tables = [
+        `CREATE TABLE IF NOT EXISTS users (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
           name TEXT, 
-          email TEXT UNIQUE, 
+          email VARCHAR(255) UNIQUE, 
           password TEXT, 
-          role TEXT DEFAULT 'student', 
-          xp INTEGER DEFAULT 0, 
-          level INTEGER DEFAULT 1, 
+          role TEXT, 
+          xp INT DEFAULT 0, 
+          level INT DEFAULT 1, 
           school TEXT,
           class TEXT,
           location TEXT,
-          study_hours INTEGER DEFAULT 0,
-          completed_lessons INTEGER DEFAULT 0,
+          study_hours INT DEFAULT 0,
+          completed_lessons INT DEFAULT 0,
           is_science_major BOOLEAN DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, icon TEXT, color TEXT, category TEXT DEFAULT 'Science', modules_count INTEGER DEFAULT 0, students_count INTEGER DEFAULT 0)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS modules (id INTEGER PRIMARY KEY AUTOINCREMENT, subject_id INTEGER, name TEXT)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS topics (id INTEGER PRIMARY KEY AUTOINCREMENT, module_id INTEGER, name TEXT, duration TEXT, type TEXT, content_url TEXT)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, topic_id INTEGER, completed BOOLEAN, score INTEGER, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, topic_id))`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, author_name TEXT, user_id INTEGER, category TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, user_id INTEGER, author_name TEXT, content TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY AUTOINCREMENT, subject_id INTEGER, topic_id INTEGER, question_text TEXT, options TEXT, correct_answer TEXT, explanation TEXT)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS achievements (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, icon TEXT, xp_reward INTEGER)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS user_achievements (user_id INTEGER, achievement_id INTEGER, unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, achievement_id))`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id TEXT UNIQUE, user_name TEXT, plan TEXT, amount TEXT, status TEXT, type TEXT, created_at DATETIME)`);
-        await runQuery(`CREATE TABLE IF NOT EXISTS papers (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, year TEXT, type TEXT DEFAULT 'National', school TEXT, subject TEXT, content TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS subjects (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          name TEXT, 
+          icon TEXT, 
+          color TEXT, 
+          category TEXT, 
+          modules_count INT DEFAULT 0, 
+          students_count INT DEFAULT 0,
+          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS modules (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          subject_id INT, 
+          name TEXT,
+          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS topics (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          module_id INT, 
+          name TEXT, 
+          duration TEXT, 
+          type TEXT, 
+          content_url TEXT,
+          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS posts (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          title TEXT, 
+          content TEXT, 
+          author_name TEXT, 
+          user_id INT, 
+          category TEXT, 
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS comments (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          post_id INT, 
+          user_id INT, 
+          author_name TEXT, 
+          content TEXT, 
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS papers (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          title TEXT NOT NULL, 
+          year TEXT, 
+          type TEXT, 
+          school TEXT, 
+          subject TEXT, 
+          content TEXT, 
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          ${DB_TYPE === 'mysql' ? 'PRIMARY KEY (id)' : ''}
+        )`
+      ];
+
+      for (const sql of tables) {
+        await runQuery(sql);
+      }
+
+      // Add missing columns if they don't exist (MySQL specific self-healing)
+      if (DB_TYPE === 'mysql') {
+        const migrations = [
+          "ALTER TABLE posts ADD COLUMN IF NOT EXISTS user_id INT",
+          "ALTER TABLE posts ADD COLUMN IF NOT EXISTS author_name TEXT",
+          "ALTER TABLE posts ADD COLUMN IF NOT EXISTS category TEXT",
+          "ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INT",
+          "ALTER TABLE comments ADD COLUMN IF NOT EXISTS author_name TEXT"
+        ];
+        // Note: IF NOT EXISTS for columns is MariaDB/MySQL 8.0.19+. 
+        // For older MySQL, we try and ignore errors if column exists.
+        for (const sql of migrations) {
+           try { await runQuery(sql.replace('IF NOT EXISTS ', '')); } catch(e) { /* ignore existing column */ }
+        }
       }
 
       // Check Admin
