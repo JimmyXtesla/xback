@@ -6,8 +6,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-    const { body, validationResult } = require('express-validator');
-    const { db, initDb } = require('./db');
+const { body, validationResult } = require('express-validator');
+const { db, initDb } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,7 +27,6 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Removed static file upload serving for stateless deployment.
 
 // --- Auth Middleware ---
 const authenticateToken = (req, res, next) => {
@@ -143,7 +142,7 @@ app.get('/api/search', (req, res) => {
 
   db.all("SELECT id, name as title, 'subject' as type, 'Subject' as subtitle FROM subjects WHERE name LIKE ?", [searchQuery], (err, subjects) => {
     if (err) return res.status(500).json({ error: err.message });
-    
+
     db.all("SELECT t.id, t.name as title, 'topic' as type, s.name as subtitle, t.module_id FROM topics t JOIN modules m ON t.module_id = m.id JOIN subjects s ON m.subject_id = s.id WHERE t.name LIKE ?", [searchQuery], (err, topics) => {
       if (err) return res.status(500).json({ error: err.message });
 
@@ -261,10 +260,10 @@ app.post('/api/progress', (req, res) => {
                 else console.log(`[XP] +50 XP granted to user ${user_id}`);
               });
           }
-          
+
           // Update streak on every progress update
           updateStreak(user_id);
-          
+
           res.json({ success: true, message: "Progress updated" });
         });
     } else {
@@ -279,10 +278,10 @@ app.post('/api/progress', (req, res) => {
                 else console.log(`[XP] +50 XP granted to user ${user_id}`);
               });
           }
-          
+
           // Update streak on new progress
           updateStreak(user_id);
-          
+
           res.json({ success: true, message: "Progress created" });
         });
     }
@@ -330,7 +329,7 @@ app.post('/api/papers', authenticateToken, (req, res) => {
   db.run(
     "INSERT INTO papers (title, year, type, school, subject, content) VALUES (?, ?, ?, ?, ?, ?)",
     [title, year || '', type || 'National', school || '', subject || '', content],
-    function(err) {
+    function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.status(201).json({ id: this.lastID, title, year, type, school, subject });
     }
@@ -342,7 +341,7 @@ app.put('/api/papers/:id', authenticateToken, (req, res) => {
   db.run(
     "UPDATE papers SET title = ?, year = ?, type = ?, school = ?, subject = ?, content = ? WHERE id = ?",
     [title, year, type, school, subject, content, req.params.id],
-    function(err) {
+    function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true, changes: this.changes });
     }
@@ -350,7 +349,7 @@ app.put('/api/papers/:id', authenticateToken, (req, res) => {
 });
 
 app.delete('/api/papers/:id', authenticateToken, (req, res) => {
-  db.run("DELETE FROM papers WHERE id = ?", [req.params.id], function(err) {
+  db.run("DELETE FROM papers WHERE id = ?", [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true, changes: this.changes });
   });
@@ -379,10 +378,10 @@ app.post('/api/auth/register', [
           }
           return res.status(500).json({ error: err.message });
         }
-        res.status(201).json({ 
-          id: this.lastID, 
-          name, 
-          email, 
+        res.status(201).json({
+          id: this.lastID,
+          name,
+          email,
           role: role || 'student',
           school: school || '',
           class: userClass || '',
@@ -414,22 +413,22 @@ app.post('/api/auth/login', [
     if (!validPassword) return res.status(401).json({ error: "Invalid credentials" });
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, name: user.name, role: user.role }, 
-      JWT_SECRET, 
+      { id: user.id, email: user.email, name: user.name, role: user.role },
+      JWT_SECRET,
       { expiresIn: '24h' } // Increased to 24h for smoother experience
     );
 
     // Remove password from user object
     delete user.password;
-    
+
     // Add additional info for store if missing
     user.school = user.school || '';
     user.class = user.class || '';
     user.location = user.location || '';
-    
+
     // Trigger streak update on login
     updateStreak(user.id);
-    
+
     res.json({ token, user });
   });
 });
@@ -446,7 +445,7 @@ app.post('/api/auth/update-profile', authenticateToken, (req, res) => {
           is_science_major = ? 
           WHERE id = ?`,
     [school, userClass, location, is_science_major ? 1 : 0, userId],
-    function(err) {
+    function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true });
     }
@@ -721,7 +720,7 @@ app.post('/api/forum/posts', authenticateToken, (req, res) => {
 
 app.post('/api/forum/posts/:id/like', authenticateToken, (req, res) => {
   const { id } = req.params;
-  db.run("UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?", [id], function(err) {
+  db.run("UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?", [id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true, message: "Post liked" });
   });
@@ -773,6 +772,34 @@ app.post('/api/users/:id/achievements/:achievementId', authenticateToken, (req, 
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true });
     });
+});
+
+// 23. Flashcards
+app.get('/api/flashcards', (req, res) => {
+  db.all("SELECT * FROM flashcards ORDER BY created_at DESC", [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.post('/api/flashcards', authenticateToken, (req, res) => {
+  const { front, back, subject_id, difficulty } = req.body;
+  if (!front || !back) return res.status(400).json({ error: "Front and back content are required" });
+  db.run(
+    "INSERT INTO flashcards (front, back, subject_id, difficulty) VALUES (?, ?, ?, ?)",
+    [front, back, subject_id || 'general', difficulty || 'medium'],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID, front, back, subject_id, difficulty });
+    }
+  );
+});
+
+app.delete('/api/flashcards/:id', authenticateToken, (req, res) => {
+  db.run("DELETE FROM flashcards WHERE id = ?", [req.params.id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, changes: this.changes });
+  });
 });
 
 // Use Error Handler
