@@ -199,7 +199,7 @@ app.get('/api/leaderboard', authenticateToken, (req, res) => {
       WHERE xp > (SELECT xp FROM users WHERE id = ?)
       OR (xp = (SELECT xp FROM users WHERE id = ?) AND name < (SELECT name FROM users WHERE id = ?))
     `;
-    
+
     db.get(rankQuery, [userId, userId, userId], (err, rankRow) => {
       const userRank = rankRow ? rankRow.rank : 0;
       res.json({
@@ -343,7 +343,7 @@ app.post('/api/progress', (req, res) => {
   });
 });
 
-// 7. Get user progress for a subject (completed topic IDs)
+// 7. Get user progress for a subject 
 app.get('/api/progress/:userId/subject/:subjectId', (req, res) => {
   const { userId, subjectId } = req.params;
   const query = `
@@ -364,7 +364,15 @@ app.get('/api/progress/:userId/subject/:subjectId', (req, res) => {
 
 // 8. Papers CRUD
 app.get('/api/papers', (req, res) => {
-  db.all("SELECT * FROM papers ORDER BY year DESC, id DESC", [], (err, rows) => {
+  const { form_level } = req.query;
+  let query = 'SELECT * FROM papers';
+  const params = [];
+  if (form_level && form_level !== 'All') {
+    query += ' WHERE (form_level = ? OR form_level IS NULL OR form_level = "")';
+    params.push(form_level);
+  }
+  query += ' ORDER BY year DESC, id DESC';
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
