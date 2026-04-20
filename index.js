@@ -95,7 +95,8 @@ const updateStreak = (userId) => {
 
 // 1. Subjects
 app.get('/api/subjects', (req, res) => {
-  const query = `
+  const { form_level } = req.query;
+  let baseQuery = `
     SELECT 
       s.*, 
       COUNT(DISTINCT m.id) as modules_count,
@@ -104,12 +105,31 @@ app.get('/api/subjects', (req, res) => {
     LEFT JOIN modules m ON s.id = m.subject_id
     LEFT JOIN topics t ON m.id = t.module_id
     LEFT JOIN progress p ON t.id = p.topic_id
-    GROUP BY s.id
   `;
-  db.all(query, [], (err, rows) => {
+  const params = [];
+  if (form_level && form_level !== 'All') {
+    baseQuery += ' WHERE (s.form_level = ? OR s.form_level IS NULL OR s.form_level = "")';
+    params.push(form_level);
+  }
+  baseQuery += ' GROUP BY s.id';
+  db.all(baseQuery, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
+});
+
+// Create Subject (Admin)
+app.post('/api/subjects', authenticateToken, (req, res) => {
+  const { name, icon, color, category, form_level } = req.body;
+  if (!name) return res.status(400).json({ error: 'Subject name is required' });
+  db.run(
+    'INSERT INTO subjects (name, icon, color, category, form_level) VALUES (?, ?, ?, ?, ?)',
+    [name, icon || 'book', color || '#6366f1', category || 'General', form_level || null],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID, name, icon, color, category, form_level });
+    }
+  );
 });
 
 // 2. Modules for a Subject
@@ -200,9 +220,17 @@ app.get('/api/notifications', authenticateToken, (req, res) => {
   res.json(notifications);
 });
 
-// 8. Past Papers
+// 8. Past Papers (with optional form_level filter)
 app.get('/api/papers', (req, res) => {
-  db.all("SELECT * FROM papers ORDER BY year DESC", [], (err, rows) => {
+  const { form_level } = req.query;
+  let query = 'SELECT * FROM papers';
+  const params = [];
+  if (form_level && form_level !== 'All') {
+    query += ' WHERE (form_level = ? OR form_level IS NULL OR form_level = "")';
+    params.push(form_level);
+  }
+  query += ' ORDER BY year DESC';
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -351,23 +379,23 @@ app.get('/api/papers/:id', (req, res) => {
 });
 
 app.post('/api/papers', authenticateToken, (req, res) => {
-  const { title, year, type, school, subject, content } = req.body;
+  const { title, year, type, school, subject, content, form_level } = req.body;
   if (!title || !content) return res.status(400).json({ error: "Title and content are required" });
   db.run(
-    "INSERT INTO papers (title, year, type, school, subject, content) VALUES (?, ?, ?, ?, ?, ?)",
-    [title, year || '', type || 'National', school || '', subject || '', content],
+    "INSERT INTO papers (title, year, type, school, subject, content, form_level) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [title, year || '', type || 'National', school || '', subject || '', content, form_level || null],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.status(201).json({ id: this.lastID, title, year, type, school, subject });
+      res.status(201).json({ id: this.lastID, title, year, type, school, subject, form_level });
     }
   );
 });
 
 app.put('/api/papers/:id', authenticateToken, (req, res) => {
-  const { title, year, type, school, subject, content } = req.body;
+  const { title, year, type, school, subject, content, form_level } = req.body;
   db.run(
-    "UPDATE papers SET title = ?, year = ?, type = ?, school = ?, subject = ?, content = ? WHERE id = ?",
-    [title, year, type, school, subject, content, req.params.id],
+    "UPDATE papers SET title = ?, year = ?, type = ?, school = ?, subject = ?, content = ?, form_level = ? WHERE id = ?",
+    [title, year, type, school, subject, content, form_level || null, req.params.id],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true, changes: this.changes });
@@ -720,16 +748,24 @@ app.get('/api/forum/posts', (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const offset = parseInt(req.query.offset) || 0;
   const category = req.query.category;
+  const form_level = req.query.form_level;
 
-  let query = "SELECT * FROM posts ";
+  let conditions = [];
   let params = [];
 
   if (category && category !== 'All') {
-    query += "WHERE category = ? ";
+    conditions.push('category = ?');
     params.push(category);
   }
 
-  query += "ORDER BY created_at DESC LIMIT ? OFFSET ?";
+  if (form_level && form_level !== 'All') {
+    conditions.push('(form_level = ? OR form_level IS NULL OR form_level = "")');
+    params.push(form_level);
+  }
+
+  let query = 'SELECT * FROM posts';
+  if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
+  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
   params.push(limit, offset);
 
   db.all(query, params, (err, rows) => {
@@ -739,13 +775,13 @@ app.get('/api/forum/posts', (req, res) => {
 });
 
 app.post('/api/forum/posts', authenticateToken, (req, res) => {
-  const { title, content, category } = req.body;
+  const { title, content, category, form_level } = req.body;
   if (!title || !content) return res.status(400).json({ error: "Title and content are required" });
 
   console.log(`[FORUM] Creating post: "${title}" by ${req.user.name} (${req.user.id})`);
 
-  db.run("INSERT INTO posts (user_id, author_name, title, content, category) VALUES (?, ?, ?, ?, ?)",
-    [req.user.id, req.user.name || 'Anonymous', title, content, category || 'General'], function (err) {
+  db.run("INSERT INTO posts (user_id, author_name, title, content, category, form_level) VALUES (?, ?, ?, ?, ?, ?)",
+    [req.user.id, req.user.name || 'Anonymous', title, content, category || 'General', form_level || null], function (err) {
       if (err) {
         console.error("[FORUM] Database Error:", err.message);
         return res.status(500).json({ error: err.message });
@@ -833,21 +869,29 @@ app.post('/api/users/:id/achievements/:achievementId', authenticateToken, (req, 
 
 // 23. Flashcards
 app.get('/api/flashcards', (req, res) => {
-  db.all("SELECT * FROM flashcards ORDER BY created_at DESC", [], (err, rows) => {
+  const { form_level } = req.query;
+  let query = 'SELECT * FROM flashcards';
+  const params = [];
+  if (form_level && form_level !== 'All') {
+    query += ' WHERE (form_level = ? OR form_level IS NULL OR form_level = "")';
+    params.push(form_level);
+  }
+  query += ' ORDER BY created_at DESC';
+  db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
 
 app.post('/api/flashcards', authenticateToken, (req, res) => {
-  const { front, back, subject_id, difficulty } = req.body;
+  const { front, back, subject_id, difficulty, form_level } = req.body;
   if (!front || !back) return res.status(400).json({ error: "Front and back content are required" });
   db.run(
-    "INSERT INTO flashcards (front, back, subject_id, difficulty) VALUES (?, ?, ?, ?)",
-    [front, back, subject_id || 'general', difficulty || 'medium'],
+    "INSERT INTO flashcards (front, back, subject_id, difficulty, form_level) VALUES (?, ?, ?, ?, ?)",
+    [front, back, subject_id || 'general', difficulty || 'medium', form_level || null],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.status(201).json({ id: this.lastID, front, back, subject_id, difficulty });
+      res.status(201).json({ id: this.lastID, front, back, subject_id, difficulty, form_level });
     }
   );
 });
