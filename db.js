@@ -219,15 +219,18 @@ const initDb = async () => {
         "ALTER TABLE comments ADD COLUMN user_id INT",
         "ALTER TABLE comments ADD COLUMN author_name VARCHAR(255)",
         "ALTER TABLE users ADD COLUMN streak INT DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN last_activity_date DATE"
+        "ALTER TABLE users ADD COLUMN last_activity_date DATE",
+        // Form level classification (Form 1, Form 2, Form 3, Form 4)
+        "ALTER TABLE subjects ADD COLUMN form_level VARCHAR(20)",
+        "ALTER TABLE papers ADD COLUMN form_level VARCHAR(20)",
+        "ALTER TABLE flashcards ADD COLUMN form_level VARCHAR(20)",
+        "ALTER TABLE posts ADD COLUMN form_level VARCHAR(20)"
       ];
 
       for (const sql of migrations) {
         try {
-          // Standard compatibility: try to add column, catch error if already exists
           await runQuery(sql);
         } catch (e) {
-          // Ignore "duplicate column" errors
         }
       }
 
