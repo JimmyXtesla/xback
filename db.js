@@ -184,6 +184,16 @@ const initDb = async () => {
           score INT DEFAULT 0,
           last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS notifications (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
+          user_id INT,
+          title VARCHAR(255),
+          message TEXT,
+          type VARCHAR(50),
+          is_read BOOLEAN DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`
       ];
 
@@ -224,7 +234,8 @@ const initDb = async () => {
         "ALTER TABLE subjects ADD COLUMN form_level VARCHAR(20)",
         "ALTER TABLE papers ADD COLUMN form_level VARCHAR(20)",
         "ALTER TABLE flashcards ADD COLUMN form_level VARCHAR(20)",
-        "ALTER TABLE posts ADD COLUMN form_level VARCHAR(20)"
+        "ALTER TABLE posts ADD COLUMN form_level VARCHAR(20)",
+        "ALTER TABLE users ADD COLUMN push_token VARCHAR(255)"
       ];
 
       for (const sql of migrations) {
