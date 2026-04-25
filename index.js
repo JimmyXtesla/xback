@@ -100,6 +100,9 @@ app.get('/api/subjects', (req, res) => {
     SELECT 
       s.*, 
       COUNT(DISTINCT m.id) as modules_count,
+      COUNT(DISTINCT m.id) as modulesCount,
+      COUNT(DISTINCT t.id) as topics_count,
+      COUNT(DISTINCT t.id) as topicsCount,
       COUNT(DISTINCT p.user_id) as students_count
     FROM subjects s
     LEFT JOIN modules m ON s.id = m.subject_id
@@ -124,7 +127,7 @@ app.post('/api/subjects', authenticateToken, (req, res) => {
   if (!name) return res.status(400).json({ error: 'Subject name is required' });
   db.run(
     'INSERT INTO subjects (name, icon, color, category, form_level) VALUES (?, ?, ?, ?, ?)',
-    [name, icon || 'book', color || '#6366f1', category || 'General', form_level || null],
+    [name, icon || 'graduation-cap', color || '#38bdf8', category || 'General', form_level || null],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.status(201).json({ id: this.lastID, name, icon, color, category, form_level });
@@ -210,14 +213,53 @@ app.get('/api/leaderboard', authenticateToken, (req, res) => {
   });
 });
 
-// 7. Notifications (Mock for now but connected)
+// 7. Notifications
 app.get('/api/notifications', authenticateToken, (req, res) => {
-  // In a real app, this would be a table. For now, returning system notifications.
-  const notifications = [
-    { id: 1, title: 'Welcome to SLIDE!', message: 'Start your learning journey today.', type: 'info', created_at: new Date() },
-    { id: 2, title: 'XP Earned', message: 'You earned 50 XP for completing your first lesson!', type: 'success', created_at: new Date() }
-  ];
-  res.json(notifications);
+  const userId = req.user.id;
+  db.all("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC", [userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.post('/api/notifications/token', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: "Token is required" });
+
+  db.run("UPDATE users SET push_token = ? WHERE id = ?", [token, userId], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, message: "Push token saved" });
+  });
+});
+
+app.post('/api/notifications/send', authenticateToken, async (req, res) => {
+  // Example admin-only or specific logic
+  if (req.user.role !== 'admin') return res.status(403).json({ error: "Access denied" });
+  
+  const { title, message, user_id } = req.body;
+  if (!title || !message) return res.status(400).json({ error: "Title and message are required" });
+
+  if (user_id) {
+    db.run("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)", 
+      [user_id, title, message, 'info']);
+      
+    // Send via Expo Push API
+    db.get("SELECT push_token FROM users WHERE id = ?", [user_id], async (err, row) => {
+      if (row && row.push_token) {
+        try {
+          await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: row.push_token, title, body: message })
+          });
+        } catch (e) {
+          console.error('Push notification failed:', e);
+        }
+      }
+    });
+  }
+  res.json({ success: true, message: "Notification queued" });
 });
 
 // 8. Past Papers (with optional form_level filter)
@@ -562,8 +604,12 @@ app.delete('/api/users/:id', authenticateToken, (req, res) => {
 // Modules
 app.post('/api/modules', authenticateToken, (req, res) => {
   const { subject_id, name } = req.body;
+  console.log(`[ADMIN] Creating module: "${name}" for subject: ${subject_id}`);
   db.run("INSERT INTO modules (subject_id, name) VALUES (?, ?)", [subject_id, name], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) {
+      console.error("[ADMIN] Module creation failed:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
     res.json({ id: this.lastID, success: true });
   });
 });
