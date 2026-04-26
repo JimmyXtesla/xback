@@ -121,6 +121,25 @@ app.get('/api/subjects', (req, res) => {
   });
 });
 
+// 1.1 Get unique Form Levels
+app.get('/api/forms', (req, res) => {
+  const query = `
+    SELECT DISTINCT form_level FROM subjects WHERE form_level IS NOT NULL AND form_level != ""
+    UNION
+    SELECT DISTINCT form_level FROM papers WHERE form_level IS NOT NULL AND form_level != ""
+    ORDER BY form_level ASC
+  `;
+  db.all(query, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const forms = rows.map(r => r.form_level);
+    // If no forms found, return a default list as fallback
+    if (forms.length === 0) {
+      return res.json(['Form 1', 'Form 2', 'Form 3', 'Form 4']);
+    }
+    res.json(forms);
+  });
+});
+
 // Create Subject (Admin)
 app.post('/api/subjects', authenticateToken, (req, res) => {
   const { name, icon, color, category, form_level } = req.body;
