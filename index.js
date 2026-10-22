@@ -976,6 +976,117 @@ app.delete('/api/flashcards/:id', authenticateToken, (req, res) => {
   });
 });
 
+// 24. Community Contributions (Lessons, Summaries, Past Papers)
+app.post('/api/contributions', authenticateToken, (req, res) => {
+  const { title, type, subject, form_level, cover_image, images, content, status } = req.body;
+  if (!title || !type || !subject) {
+    return res.status(400).json({ error: "Title, type, and subject are required" });
+  }
+
+  const userId = req.user.id;
+  const authorName = req.user.name || 'Contributor';
+  const finalStatus = req.user.role === 'admin' ? 'approved' : (status || 'pending');
+  const imagesStr = Array.isArray(images) ? JSON.stringify(images) : (images || '[]');
+
+  db.run(
+    `INSERT INTO contributions (title, type, subject, form_level, cover_image, images, content, status, author_id, author_name) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [title, type, subject, form_level || 'General', cover_image || null, imagesStr, content || '', finalStatus, userId, authorName],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({
+        id: this.lastID,
+        title,
+        type,
+        subject,
+        form_level,
+        cover_image,
+        images: Array.isArray(images) ? images : [],
+        content,
+        status: finalStatus,
+        author_id: userId,
+        author_name: authorName,
+      });
+    }
+  );
+});
+
+app.get('/api/contributions', (req, res) => {
+  const { form_level, subject, status } = req.query;
+  let query = 'SELECT * FROM contributions WHERE 1=1';
+  const params = [];
+
+  if (status && status !== 'all') {
+    query += ' AND status = ?';
+    params.push(status);
+  } else if (!status) {
+    query += ' AND status = "approved"';
+  }
+
+  if (form_level && form_level !== 'All') {
+    query += ' AND (form_level = ? OR form_level = "General" OR form_level IS NULL)';
+    params.push(form_level);
+  }
+
+  if (subject) {
+    query += ' AND (LOWER(subject) = LOWER(?) OR LOWER(subject) LIKE LOWER(?))';
+    params.push(subject, `%${subject}%`);
+  }
+
+  query += ' ORDER BY created_at DESC';
+
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const formatted = (rows || []).map(r => {
+      let parsedImages = [];
+      try {
+        parsedImages = typeof r.images === 'string' ? JSON.parse(r.images) : (r.images || []);
+      } catch (e) {
+        parsedImages = [];
+      }
+      return {
+        ...r,
+        images: parsedImages,
+      };
+    });
+    res.json(formatted);
+  });
+});
+
+app.patch('/api/contributions/:id/status', authenticateToken, (req, res) => {
+  const { status } = req.body;
+  if (!['approved', 'rejected', 'pending'].includes(status)) {
+    return res.status(400).json({ error: "Invalid status value" });
+  }
+
+  db.run("UPDATE contributions SET status = ? WHERE id = ?", [status, req.params.id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, changes: this.changes });
+  });
+});
+
+app.delete('/api/contributions/:id', authenticateToken, (req, res) => {
+  db.run("DELETE FROM contributions WHERE id = ?", [req.params.id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, changes: this.changes });
+  });
+});
+
+// 25. Account Deletion Request
+app.post('/api/auth/request-deletion', authenticateToken, (req, res) => {
+  const { reason } = req.body;
+  const userId = req.user.id;
+
+  db.run(
+    "INSERT INTO account_deletion_requests (user_id, reason) VALUES (?, ?)",
+    [userId, reason || 'No reason provided'],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, message: "Deletion request scheduled for 24 hours" });
+    }
+  );
+});
+
 // Use Error Handler
 app.use(errorHandler);
 
