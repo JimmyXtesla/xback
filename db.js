@@ -97,6 +97,8 @@ const initDb = async () => {
           school VARCHAR(255),
           class VARCHAR(100),
           location VARCHAR(255),
+          age INT,
+          guardian_consent BOOLEAN DEFAULT 0,
           study_hours INT DEFAULT 0,
           completed_lessons INT DEFAULT 0,
           is_science_major BOOLEAN DEFAULT 0,
@@ -142,6 +144,21 @@ const initDb = async () => {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
+        `CREATE TABLE IF NOT EXISTS forum_reports (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+          reporter_id INT NOT NULL,
+          target_type VARCHAR(20) NOT NULL,
+          post_id INT,
+          target_user_id INT,
+          reason VARCHAR(80) NOT NULL,
+          details TEXT,
+          status VARCHAR(20) NOT NULL DEFAULT 'open',
+          moderator_id INT,
+          moderator_note TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
+        )`,
         `CREATE TABLE IF NOT EXISTS post_likes (
           user_id INT,
           post_id INT,
@@ -164,6 +181,7 @@ const initDb = async () => {
           school VARCHAR(255), 
           subject VARCHAR(255), 
           content TEXT, 
+          pdf_url VARCHAR(1000),
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
@@ -184,6 +202,31 @@ const initDb = async () => {
           score INT DEFAULT 0,
           last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS study_quests (
+          user_id INT NOT NULL UNIQUE,
+          quest_type VARCHAR(20) NOT NULL,
+          target INT NOT NULL DEFAULT 1,
+          progress INT NOT NULL DEFAULT 0,
+          reward_xp INT NOT NULL DEFAULT 25,
+          started_at BIGINT NOT NULL,
+          completed_at BIGINT
+        )`,
+        `CREATE TABLE IF NOT EXISTS study_activity_events (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+          user_id INT NOT NULL,
+          event_id VARCHAR(100) NOT NULL,
+          activity_type VARCHAR(20) NOT NULL,
+          xp_awarded INT NOT NULL DEFAULT 0,
+          quest_xp_awarded INT NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (user_id, event_id)
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS user_sync_data (
+          user_id INT NOT NULL UNIQUE,
+          payload ${DB_TYPE === 'mysql' ? 'LONGTEXT' : 'TEXT'} NOT NULL,
+          updated_at BIGINT NOT NULL
         )`,
         `CREATE TABLE IF NOT EXISTS notifications (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'}, 
@@ -251,6 +294,8 @@ const initDb = async () => {
         "ALTER TABLE posts ADD COLUMN category VARCHAR(100)",
         "ALTER TABLE posts ADD COLUMN likes_count INT DEFAULT 0",
         "ALTER TABLE posts ADD COLUMN views_count INT DEFAULT 0",
+        "ALTER TABLE posts ADD COLUMN moderation_status VARCHAR(20) DEFAULT 'active'",
+        "ALTER TABLE users ADD COLUMN forum_suspended BOOLEAN DEFAULT 0",
         "ALTER TABLE comments ADD COLUMN user_id INT",
         "ALTER TABLE comments ADD COLUMN author_name VARCHAR(255)",
         "ALTER TABLE users ADD COLUMN streak INT DEFAULT 0",
@@ -260,7 +305,10 @@ const initDb = async () => {
         "ALTER TABLE papers ADD COLUMN form_level VARCHAR(20)",
         "ALTER TABLE flashcards ADD COLUMN form_level VARCHAR(20)",
         "ALTER TABLE posts ADD COLUMN form_level VARCHAR(20)",
-        "ALTER TABLE users ADD COLUMN push_token VARCHAR(255)"
+        "ALTER TABLE users ADD COLUMN push_token VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN age INT",
+        "ALTER TABLE users ADD COLUMN guardian_consent BOOLEAN DEFAULT 0",
+        "ALTER TABLE papers ADD COLUMN pdf_url VARCHAR(1000)"
       ];
 
       for (const sql of migrations) {
@@ -268,6 +316,16 @@ const initDb = async () => {
           await runQuery(sql);
         } catch (e) {
         }
+      }
+
+      const forumIndexQueries = [
+        `CREATE INDEX IF NOT EXISTS idx_forum_reports_status_created ON forum_reports(status, created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_forum_reports_post ON forum_reports(post_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_forum_reports_user ON forum_reports(target_user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_posts_moderation_status ON posts(moderation_status)`
+      ];
+      for (const sql of forumIndexQueries) {
+        try { await runQuery(DB_TYPE === 'mysql' ? sql.replace('IF NOT EXISTS ', '') : sql); } catch (e) { }
       }
 
       // Check Admin
