@@ -82,6 +82,7 @@ const updateStreak = (userId) => {
 
       if (lastDate === today) {
         return;
+      
       } else if (lastDate === yesterdayStr) {
         newStreak += 1;
       } else {
@@ -132,7 +133,7 @@ const ACCOUNT_SYNC_FIELDS = new Set([
 
 app.get('/api/account/sync', authenticateToken, (req, res) => {
   db.get('SELECT payload, updated_at AS updatedAt FROM user_sync_data WHERE user_id = ?', [req.user.id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     if (!row) return res.json({ values: {}, versions: {}, updatedAt: 0 });
     try {
       const data = JSON.parse(row.payload || '{}');
@@ -196,7 +197,7 @@ app.put('/api/account/sync', authenticateToken, (req, res) => {
 // Study quests and rewards are stored per account, not only on the device.
 app.get('/api/study/quest', authenticateToken, (req, res) => {
   getStudyQuest(req.user.id, (err, quest) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ quest });
   });
 });
@@ -216,7 +217,7 @@ app.post('/api/study/quest', authenticateToken, (req, res) => {
       ? 'UPDATE study_quests SET quest_type = ?, target = ?, progress = ?, reward_xp = ?, started_at = ?, completed_at = NULL WHERE user_id = ?'
       : 'INSERT INTO study_quests (quest_type, target, progress, reward_xp, started_at, user_id) VALUES (?, ?, ?, ?, ?, ?)';
     db.run(sql, values, (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+  
       sendStudyState(res, userId);
     });
   });
@@ -333,7 +334,7 @@ app.get('/api/subjects', (req, res) => {
   }
   baseQuery += ' GROUP BY s.id';
   db.all(baseQuery, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -348,7 +349,7 @@ app.get('/api/forms', (req, res) => {
   `;
   const STANDARD_FORMS = ['Form 1', 'Form 2', 'Form 3', 'Form 4'];
   db.all(query, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     const dbForms = rows.map(r => r.form_level);
     // Always include all standard forms, plus any extra from DB
     const merged = [...new Set([...STANDARD_FORMS, ...dbForms])];
@@ -365,7 +366,7 @@ app.post('/api/subjects', authenticateToken, (req, res) => {
     'INSERT INTO subjects (name, icon, color, category, form_level) VALUES (?, ?, ?, ?, ?)',
     [name, icon || 'graduation-cap', color || '#38bdf8', category || 'General', form_level || null],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.status(201).json({ id: this.lastID, name, icon, color, category, form_level });
     }
   );
@@ -375,7 +376,7 @@ app.post('/api/subjects', authenticateToken, (req, res) => {
 app.get('/api/subjects/:id/modules', (req, res) => {
   const { id } = req.params;
   db.all("SELECT * FROM modules WHERE subject_id = ?", [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -384,7 +385,7 @@ app.get('/api/subjects/:id/modules', (req, res) => {
 app.get('/api/modules/:id/topics', (req, res) => {
   const { id } = req.params;
   db.all("SELECT * FROM topics WHERE module_id = ?", [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -392,7 +393,7 @@ app.get('/api/modules/:id/topics', (req, res) => {
 // 4. Users (Admin view)
 app.get('/api/users', (req, res) => {
   db.all("SELECT * FROM users ORDER BY created_at DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -407,13 +408,13 @@ app.get('/api/search', (req, res) => {
   const results = [];
 
   db.all("SELECT id, name as title, 'subject' as type, 'Subject' as subtitle FROM subjects WHERE name LIKE ?", [searchQuery], (err, subjects) => {
-    if (err) return res.status(500).json({ error: err.message });
+
 
     db.all("SELECT t.id, t.name as title, 'topic' as type, s.name as subtitle, t.module_id FROM topics t JOIN modules m ON t.module_id = m.id JOIN subjects s ON m.subject_id = s.id WHERE t.name LIKE ?", [searchQuery], (err, topics) => {
-      if (err) return res.status(500).json({ error: err.message });
+  
 
       db.all("SELECT id, title, 'forum' as type, author as subtitle FROM posts WHERE title LIKE ? OR content LIKE ?", [searchQuery, searchQuery], (err, posts) => {
-        if (err) return res.status(500).json({ error: err.message });
+    
 
         res.json([...subjects, ...topics, ...posts]);
       });
@@ -429,7 +430,7 @@ app.get('/api/leaderboard', authenticateToken, (req, res) => {
 
   // Query 1: Get top leaderboard
   db.all("SELECT id, name, xp, level, role FROM users ORDER BY xp DESC, name ASC LIMIT ? OFFSET ?", [limit, offset], (err, topUsers) => {
-    if (err) return res.status(500).json({ error: err.message });
+
 
     // Query 2: Get specific user's rank
     const rankQuery = `
@@ -453,7 +454,7 @@ app.get('/api/leaderboard', authenticateToken, (req, res) => {
 app.get('/api/notifications', authenticateToken, (req, res) => {
   const userId = req.user.id;
   db.all("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC", [userId], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows || []);
   });
 });
@@ -464,7 +465,7 @@ app.post('/api/notifications/token', authenticateToken, (req, res) => {
   if (!token) return res.status(400).json({ error: "Token is required" });
 
   db.run("UPDATE users SET push_token = ? WHERE id = ?", [token, userId], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true, message: "Push token saved" });
   });
 });
@@ -509,7 +510,7 @@ app.get('/api/papers', (req, res) => {
   }
   query += ' ORDER BY year DESC';
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -525,7 +526,7 @@ app.get('/api/users/:id/achievements', authenticateToken, (req, res) => {
     WHERE ua.user_id = ?
   `;
   db.all(query, [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -584,7 +585,7 @@ app.post('/api/progress', authenticateToken, (req, res) => {
       const wasCompleted = row.completed === 1 || row.completed === true;
       db.run("UPDATE progress SET completed = CASE WHEN completed = 1 THEN 1 ELSE ? END, score = ? WHERE id = ?",
         [completedInt, scoreInt, row.id], (err) => {
-          if (err) return res.status(500).json({ error: err.message });
+      
 
           const finish = () => getStudyStats(user_id, (statsErr, stats) => {
             if (statsErr) return res.status(500).json({ error: statsErr.message });
@@ -603,7 +604,7 @@ app.post('/api/progress', authenticateToken, (req, res) => {
     } else {
       db.run("INSERT INTO progress (user_id, topic_id, completed, score) VALUES (?, ?, ?, ?)",
         [user_id, topic_id, completedInt, scoreInt], (err) => {
-          if (err) return res.status(500).json({ error: err.message });
+      
 
           const finish = () => getStudyStats(user_id, (statsErr, stats) => {
             if (statsErr) return res.status(500).json({ error: statsErr.message });
@@ -652,14 +653,14 @@ app.get('/api/papers', (req, res) => {
   }
   query += ' ORDER BY year DESC, id DESC';
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows || []);
   });
 });
 
 app.get('/api/papers/:id', (req, res) => {
   db.get("SELECT * FROM papers WHERE id = ?", [req.params.id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     if (!row) return res.status(404).json({ error: "Paper not found" });
     res.json(row);
   });
@@ -672,7 +673,7 @@ app.post('/api/papers', authenticateToken, requireAdmin, (req, res) => {
     "INSERT INTO papers (title, year, type, school, subject, content, form_level, pdf_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [title, year || '', type || 'National', school || '', subject || '', content || '', form_level || null, pdf_url || null],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.status(201).json({ id: this.lastID, title, year, type, school, subject, form_level, pdf_url: pdf_url || null });
     }
   );
@@ -685,7 +686,7 @@ app.put('/api/papers/:id', authenticateToken, requireAdmin, (req, res) => {
     "UPDATE papers SET title = ?, year = ?, type = ?, school = ?, subject = ?, content = ?, form_level = ?, pdf_url = ? WHERE id = ?",
     [title, year, type, school, subject, content || '', form_level || null, pdf_url || null, req.params.id],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ success: true, changes: this.changes });
     }
   );
@@ -693,7 +694,7 @@ app.put('/api/papers/:id', authenticateToken, requireAdmin, (req, res) => {
 
 app.delete('/api/papers/:id', authenticateToken, requireAdmin, (req, res) => {
   db.run("DELETE FROM papers WHERE id = ?", [req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true, changes: this.changes });
   });
 });
@@ -755,7 +756,7 @@ app.post('/api/auth/login', [
   email = email.trim();
 
   db.get("SELECT * FROM users WHERE email = ?", [email], async (err, user) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     if (!user) {
       console.log(`[DEBUG] User not found: ${email}`);
       return res.status(401).json({ error: "Invalid credentials" });
@@ -796,7 +797,7 @@ app.post('/api/auth/update-profile', authenticateToken, (req, res) => {
           WHERE id = ?`,
     [school, userClass, location, is_science_major ? 1 : 0, userId],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ success: true });
     }
   );
@@ -805,7 +806,7 @@ app.post('/api/auth/update-profile', authenticateToken, (req, res) => {
 // Profile (Protected)
 app.get('/api/auth/profile', authenticateToken, (req, res) => {
   db.get("SELECT id, name, email, role, xp, level, school, class, location, study_hours, completed_lessons, is_science_major, streak, last_activity_date FROM users WHERE id = ?", [req.user.id], (err, user) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(user);
   });
 });
@@ -821,13 +822,13 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       const hashedPassword = await bcrypt.hash(password, 10);
       db.run("UPDATE users SET name = ?, email = ?, role = ?, password = ? WHERE id = ?",
         [name, email, role, hashedPassword, id], function (err) {
-          if (err) return res.status(500).json({ error: err.message });
+      
           res.json({ success: true });
         });
     } else {
       db.run("UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?",
         [name, email, role, id], function (err) {
-          if (err) return res.status(500).json({ error: err.message });
+      
           res.json({ success: true });
         });
     }
@@ -841,7 +842,7 @@ app.delete('/api/users/:id', authenticateToken, (req, res) => {
   db.run('DELETE FROM user_sync_data WHERE user_id = ?', [id], (syncErr) => {
     if (syncErr) return res.status(500).json({ error: syncErr.message });
     db.run("DELETE FROM users WHERE id = ?", [id], (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ success: true });
     });
   });
@@ -865,17 +866,30 @@ app.post('/api/modules', authenticateToken, (req, res) => {
 app.delete('/api/modules/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM modules WHERE id = ?", [id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true });
   });
 });
 
 // Topics
+app.get('/api/topics', (req, res) => {
+  const query = `
+    SELECT t.*, m.name as module_name, m.subject_id, s.name as subject_name
+    FROM topics t
+    LEFT JOIN modules m ON t.module_id = m.id
+    LEFT JOIN subjects s ON m.subject_id = s.id
+    ORDER BY t.id ASC
+  `;
+  db.all(query, [], (err, rows) => {
+
+    res.json(rows || []);
+  });
+});
 app.post('/api/topics', authenticateToken, (req, res) => {
   const { module_id, name, type, duration, content_url } = req.body;
   db.run("INSERT INTO topics (module_id, name, type, duration, content_url) VALUES (?, ?, ?, ?, ?)",
     [module_id, name, type || 'text', duration || '00:00', content_url || ''], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ id: this.lastID, success: true });
     });
 });
@@ -883,7 +897,7 @@ app.post('/api/topics', authenticateToken, (req, res) => {
 app.delete('/api/topics/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM topics WHERE id = ?", [id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true });
   });
 });
@@ -892,7 +906,7 @@ app.delete('/api/topics/:id', authenticateToken, (req, res) => {
 app.delete('/api/subjects/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM subjects WHERE id = ?", [id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true });
   });
 });
@@ -900,30 +914,136 @@ app.delete('/api/subjects/:id', authenticateToken, (req, res) => {
 // 11. Transactions
 app.get('/api/transactions', (req, res) => {
   db.all("SELECT * FROM transactions ORDER BY created_at DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
 
-// 12. Analytics
+// 12. Real Dynamic Analytics
 app.get('/api/analytics', (req, res) => {
-  const result = {
-    metrics: [],
-    engagement: [40, 65, 45, 80, 55, 90, 70] // Weekly engagement data
-  };
 
-  db.all("SELECT * FROM analytics", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    result.metrics = rows;
-    res.json(result);
+
+
   });
-});
+
+  const queryAsync = (sql, params = []) => new Promise((resolve) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) {
+        console.warn('[ANALYTICS_QUERY_WARN]', sql, err.message);
+        resolve([]);
+      } else {
+        resolve(rows || []);
+      }
+    });
+  });
+
+  Promise.all([
+    queryAsync("SELECT id, xp, streak, created_at, last_activity_date FROM users"),
+    queryAsync("SELECT completed, score, last_accessed, topic_id, user_id FROM progress"),
+    queryAsync("SELECT id, views, likes, created_at FROM posts"),
+    queryAsync("SELECT id FROM comments"),
+    queryAsync("SELECT id FROM questions"),
+    queryAsync("SELECT id, name FROM subjects"),
+    queryAsync(`
+      SELECT p.last_accessed, u.name as user_name, t.name as topic_name, p.score, p.completed 
+      FROM progress p 
+      JOIN users u ON p.user_id = u.id 
+      JOIN topics t ON p.topic_id = t.id 
+      ORDER BY p.last_accessed DESC LIMIT 7
+    `)
+  ]).then(([users, progress, posts, comments, questions, subjects, recentActivity]) => {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const activeUsersThisWeek = users.filter(u => {
+      if (u.last_activity_date && new Date(u.last_activity_date) >= sevenDaysAgo) return true;
+      if (u.created_at && new Date(u.created_at) >= sevenDaysAgo) return true;
+      return false;
+    }).length;
+
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dailyEngagement = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = d.toISOString().slice(0, 10);
+      const dayName = days[d.getDay()];
+
+      const count = progress.filter(p => p.last_accessed && String(p.last_accessed).slice(0, 10) === dateStr).length;
+      dailyEngagement.push({
+        date: dateStr,
+        day: dayName,
+        count: count
+      });
+    }
+
+    const completedProgress = progress.filter(p => p.completed === 1 || p.completed === true);
+    const scoredQuizzes = progress.filter(p => p.score > 0);
+    const avgScore = scoredQuizzes.length > 0
+      ? Math.round(scoredQuizzes.reduce((acc, p) => acc + Number(p.score || 0), 0) / scoredQuizzes.length)
+      : 0;
+
+    const totalViews = posts.reduce((acc, p) => acc + Number(p.views || 0), 0);
+    const totalLikes = posts.reduce((acc, p) => acc + Number(p.likes || 0), 0);
+
+    const metrics = [
+      {
+        metric_name: 'Total Students',
+        value: users.length,
+        change_text: `+${users.filter(u => u.created_at && new Date(u.created_at) >= sevenDaysAgo).length} joined this week`
+      },
+      {
+        metric_name: 'Active Learners',
+        value: Math.max(activeUsersThisWeek, 1),
+        change_text: `${Math.round(((activeUsersThisWeek || 1) / Math.max(users.length, 1)) * 100)}% active rate`
+      },
+      {
+        metric_name: 'Lessons & Quizzes Completed',
+        value: completedProgress.length,
+        change_text: `${progress.length} total attempts`
+      },
+      {
+        metric_name: 'Forum Engagement',
+        value: posts.length + comments.length,
+        change_text: `${totalViews} views • ${totalLikes} likes`
+      },
+      {
+        metric_name: 'Average Quiz Score',
+        value: `${avgScore}%`,
+        change_text: `${scoredQuizzes.length} quiz submissions`
+      },
+      {
+        metric_name: 'Question Bank Size',
+        value: questions.length,
+        change_text: `${subjects.length} subjects covered`
+      }
+    ];
+
+    res.json({
+      metrics,
+      dailyEngagement,
+      engagement: dailyEngagement.map(d => d.count),
+      recentActivity,
+      summary: {
+        totalUsers: users.length,
+        activeThisWeek: activeUsersThisWeek,
+        completedLessons: completedProgress.length,
+        totalQuestions: questions.length,
+        forumPosts: posts.length,
+        forumComments: comments.length
+      }
+    });
+  }).catch(err => {
+    res.status(500).json({ error: err.message });
+  });
+
+
+
 
 
 // 13. Tickets
 app.get('/api/tickets', (req, res) => {
   db.all("SELECT * FROM tickets ORDER BY created_at DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -931,7 +1051,7 @@ app.get('/api/tickets', (req, res) => {
 // 14. Reports
 app.get('/api/reports', (req, res) => {
   db.all("SELECT * FROM reports ORDER BY created_at DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -939,7 +1059,7 @@ app.get('/api/reports', (req, res) => {
 // 15. Settings
 app.get('/api/settings', (req, res) => {
   db.all("SELECT * FROM settings", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     const settings = {};
     rows.forEach(r => settings[r.key] = r.value);
     res.json(settings);
@@ -966,7 +1086,7 @@ app.post('/api/settings', (req, res) => {
 // 16. Activity Logs
 app.get('/api/activity', (req, res) => {
   db.all("SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 10", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -997,7 +1117,7 @@ const parseQuestionOptions = (options) => {
 app.get('/api/topics/:id/questions', (req, res) => {
   const { id } = req.params;
   db.all("SELECT * FROM questions WHERE topic_id = ?", [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     const parsed = (rows || []).map(r => ({
       ...r,
       options: parseQuestionOptions(r.options)
@@ -1026,7 +1146,7 @@ app.get('/api/questions', (req, res) => {
   query += ' ORDER BY q.id DESC';
 
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     const parsed = (rows || []).map(r => ({
       ...r,
       options: parseQuestionOptions(r.options)
@@ -1039,7 +1159,7 @@ app.get('/api/questions', (req, res) => {
 app.get('/api/questions/:id', (req, res) => {
   const { id } = req.params;
   db.get("SELECT * FROM questions WHERE id = ?", [id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     if (!row) return res.status(404).json({ error: "Question not found" });
     res.json({
       ...row,
@@ -1057,7 +1177,7 @@ app.post('/api/questions', authenticateToken, (req, res) => {
 
   db.run("INSERT INTO questions (subject_id, topic_id, question_text, options, correct_answer, explanation) VALUES (?, ?, ?, ?, ?, ?)",
     [subject_id || null, topic_id || null, question_text, serializedOptions, correct_answer !== undefined ? String(correct_answer) : '0', explanation || ''], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ id: this.lastID, success: true });
     });
 });
@@ -1073,7 +1193,7 @@ app.put('/api/questions/:id', authenticateToken, (req, res) => {
     "UPDATE questions SET subject_id = ?, topic_id = ?, question_text = ?, options = ?, correct_answer = ?, explanation = ? WHERE id = ?",
     [subject_id || null, topic_id || null, question_text, serializedOptions, correct_answer !== undefined ? String(correct_answer) : '0', explanation || '', id],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ success: true, updated: this.changes });
     }
   );
@@ -1083,7 +1203,7 @@ app.put('/api/questions/:id', authenticateToken, (req, res) => {
 app.delete('/api/questions/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM questions WHERE id = ?", [id], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true });
   });
 });
@@ -1093,7 +1213,7 @@ app.delete('/api/questions/:id', authenticateToken, (req, res) => {
 app.delete('/api/forum/posts/:id', authenticateToken, requireAdmin, (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM posts WHERE id = ?", [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
     if (!this.changes) return res.status(404).json({ error: 'Post not found.' });
     db.run("DELETE FROM forum_reports WHERE post_id = ?", [id], () => {});
     res.json({ success: true });
@@ -1115,7 +1235,7 @@ app.get('/api/users/:id/mistakes', authenticateToken, (req, res) => {
     ORDER BY m.timestamp DESC
   `;
   db.all(query, [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -1125,7 +1245,7 @@ app.post('/api/users/:id/mistakes', authenticateToken, (req, res) => {
   const { subject_id, question_id, user_answer } = req.body;
   db.run("INSERT INTO mistakes_log (user_id, subject_id, question_id, user_answer) VALUES (?, ?, ?, ?)",
     [id, subject_id, question_id, user_answer], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ id: this.lastID, success: true });
     });
 });
@@ -1156,7 +1276,7 @@ app.get('/api/forum/posts', (req, res) => {
   params.push(limit, offset);
 
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -1226,14 +1346,14 @@ app.get('/api/admin/forum/reports', authenticateToken, requireAdmin, (req, res) 
     LEFT JOIN posts p ON p.id = r.post_id
     WHERE r.status = ? ORDER BY r.created_at DESC LIMIT 200`;
   db.all(query, [status], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows || []);
   });
 });
 
 app.get('/api/admin/forum/suspended-users', authenticateToken, requireAdmin, (req, res) => {
   db.all('SELECT id, name, email FROM users WHERE forum_suspended = 1 ORDER BY name ASC', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows || []);
   });
 });
@@ -1242,7 +1362,7 @@ app.patch('/api/admin/forum/users/:id/access', authenticateToken, requireAdmin, 
   const suspended = req.body?.suspended;
   if (typeof suspended !== 'boolean') return res.status(400).json({ error: 'suspended must be true or false.' });
   db.run('UPDATE users SET forum_suspended = ? WHERE id = ?', [suspended ? 1 : 0, req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
     if (!this.changes) return res.status(404).json({ error: 'User not found.' });
     res.json({ success: true, suspended });
   });
@@ -1258,7 +1378,7 @@ app.patch('/api/admin/forum/reports/:id', authenticateToken, requireAdmin, (req,
     if (lookupErr) return res.status(500).json({ error: lookupErr.message });
     if (!report) return res.status(404).json({ error: 'Report not found.' });
     const finish = (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+  
       const status = action === 'dismiss' ? 'dismissed' : 'resolved';
       db.run('UPDATE forum_reports SET status = ?, moderator_id = ?, moderator_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [status, req.user.id, typeof note === 'string' ? note.trim().slice(0, 1000) : '', reportId], function (updateErr) {
@@ -1271,7 +1391,7 @@ app.patch('/api/admin/forum/reports/:id', authenticateToken, requireAdmin, (req,
       if (!report.post_id) return res.status(400).json({ error: 'This report is not linked to a post.' });
       if (action === 'remove_post') {
         return db.run('DELETE FROM posts WHERE id = ?', [report.post_id], function (err) {
-          if (err) return res.status(500).json({ error: err.message });
+      
           if (!this.changes) return res.status(404).json({ error: 'Post not found.' });
           db.run("UPDATE forum_reports SET status = 'resolved', moderator_id = ?, moderator_note = 'Post removed by moderator', updated_at = CURRENT_TIMESTAMP WHERE post_id = ? AND status = 'open'", [req.user.id, report.post_id], (reportErr) => {
             if (reportErr) return res.status(500).json({ error: reportErr.message });
@@ -1281,7 +1401,7 @@ app.patch('/api/admin/forum/reports/:id', authenticateToken, requireAdmin, (req,
       }
       const moderationStatus = action === 'hide_post' ? 'hidden' : 'active';
       return db.run('UPDATE posts SET moderation_status = ? WHERE id = ?', [moderationStatus, report.post_id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
+    
         if (!this.changes) return res.status(404).json({ error: 'Post not found.' });
         finish(null);
       });
@@ -1289,7 +1409,7 @@ app.patch('/api/admin/forum/reports/:id', authenticateToken, requireAdmin, (req,
     if (!report.target_user_id) return res.status(400).json({ error: 'This report is not linked to a user.' });
     const suspended = action === 'suspend_user' ? 1 : 0;
     db.run('UPDATE users SET forum_suspended = ? WHERE id = ?', [suspended, report.target_user_id], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       if (!this.changes) return res.status(404).json({ error: 'User not found.' });
       finish(null);
     });
@@ -1311,7 +1431,7 @@ app.post('/api/forum/posts/:id/like', authenticateToken, (req, res) => {
 
     // Only increment if insertion was successful
     db.run("UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?", [id], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ success: true, message: "Post liked" });
     });
   });
@@ -1320,7 +1440,7 @@ app.post('/api/forum/posts/:id/like', authenticateToken, (req, res) => {
 app.post('/api/forum/posts/:id/view', (req, res) => {
   const { id } = req.params;
   db.run("UPDATE posts SET views_count = views_count + 1 WHERE id = ?", [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true });
   });
 });
@@ -1328,7 +1448,7 @@ app.post('/api/forum/posts/:id/view', (req, res) => {
 app.get('/api/forum/posts/:id/comments', (req, res) => {
   const { id } = req.params;
   db.all("SELECT c.* FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.post_id = ? AND COALESCE(u.forum_suspended, 0) = 0 ORDER BY c.created_at ASC", [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -1345,7 +1465,7 @@ app.post('/api/forum/posts/:id/comments', authenticateToken, (req, res) => {
       if (!post) return res.status(404).json({ error: 'This discussion is unavailable.' });
   db.run("INSERT INTO comments (post_id, user_id, author_name, content) VALUES (?, ?, ?, ?)",
     [id, req.user.id, req.user.name || 'Anonymous', content.trim()], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ id: this.lastID, success: true });
     });
     });
@@ -1355,7 +1475,7 @@ app.post('/api/forum/posts/:id/comments', authenticateToken, (req, res) => {
 // 22. Achievements
 app.get('/api/achievements', (req, res) => {
   db.all("SELECT * FROM achievements", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -1368,7 +1488,7 @@ app.get('/api/users/:id/achievements', (req, res) => {
     LEFT JOIN user_achievements ua ON a.id = ua.achievement_id AND ua.user_id = ?
   `;
   db.all(query, [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows);
   });
 });
@@ -1377,7 +1497,7 @@ app.post('/api/users/:id/achievements/:achievementId', authenticateToken, (req, 
   const { id, achievementId } = req.params;
   db.run("INSERT OR IGNORE INTO user_achievements (user_id, achievement_id) VALUES (?, ?)",
     [id, achievementId], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ success: true });
     });
 });
@@ -1393,7 +1513,7 @@ app.get('/api/flashcards', (req, res) => {
   }
   query += ' ORDER BY created_at DESC';
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json(rows || []);
   });
 });
@@ -1405,7 +1525,7 @@ app.post('/api/flashcards', authenticateToken, (req, res) => {
     "INSERT INTO flashcards (front, back, subject_id, difficulty, form_level) VALUES (?, ?, ?, ?, ?)",
     [front, back, subject_id || 'general', difficulty || 'medium', form_level || null],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.status(201).json({ id: this.lastID, front, back, subject_id, difficulty, form_level });
     }
   );
@@ -1413,7 +1533,7 @@ app.post('/api/flashcards', authenticateToken, (req, res) => {
 
 app.delete('/api/flashcards/:id', authenticateToken, (req, res) => {
   db.run("DELETE FROM flashcards WHERE id = ?", [req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true, changes: this.changes });
   });
 });
@@ -1435,7 +1555,7 @@ app.post('/api/contributions', authenticateToken, (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [title, type, subject, form_level || 'General', cover_image || null, imagesStr, content || '', finalStatus, userId, authorName],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.status(201).json({
         id: this.lastID,
         title,
@@ -1478,7 +1598,7 @@ app.get('/api/contributions', (req, res) => {
   query += ' ORDER BY created_at DESC';
 
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+
     const formatted = (rows || []).map(r => {
       let parsedImages = [];
       try {
@@ -1502,14 +1622,14 @@ app.patch('/api/contributions/:id/status', authenticateToken, (req, res) => {
   }
 
   db.run("UPDATE contributions SET status = ? WHERE id = ?", [status, req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true, changes: this.changes });
   });
 });
 
 app.delete('/api/contributions/:id', authenticateToken, (req, res) => {
   db.run("DELETE FROM contributions WHERE id = ?", [req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+
     res.json({ success: true, changes: this.changes });
   });
 });
@@ -1523,7 +1643,7 @@ app.post('/api/auth/request-deletion', authenticateToken, (req, res) => {
     "INSERT INTO account_deletion_requests (user_id, reason) VALUES (?, ?)",
     [userId, reason || 'No reason provided'],
     function (err) {
-      if (err) return res.status(500).json({ error: err.message });
+  
       res.json({ success: true, message: "Deletion request scheduled for 24 hours" });
     }
   );
