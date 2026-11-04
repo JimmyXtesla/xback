@@ -346,14 +346,14 @@ app.get('/api/forms', (req, res) => {
     SELECT DISTINCT form_level FROM papers WHERE form_level IS NOT NULL AND form_level != ""
     ORDER BY form_level ASC
   `;
+  const STANDARD_FORMS = ['Form 1', 'Form 2', 'Form 3', 'Form 4'];
   db.all(query, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    const forms = rows.map(r => r.form_level);
-    // If no forms found, return a default list as fallback
-    if (forms.length === 0) {
-      return res.json(['Form 1', 'Form 2', 'Form 3', 'Form 4']);
-    }
-    res.json(forms);
+    const dbForms = rows.map(r => r.form_level);
+    // Always include all standard forms, plus any extra from DB
+    const merged = [...new Set([...STANDARD_FORMS, ...dbForms])];
+    merged.sort();
+    res.json(merged);
   });
 });
 
@@ -975,29 +975,111 @@ app.get('/api/activity', (req, res) => {
 
 
 
-// 19. Quiz Questions
+// 19. Quiz Questions & Management
+const parseQuestionOptions = (options) => {
+  if (!options) return [];
+  if (Array.isArray(options)) return options;
+  if (typeof options === 'string') {
+    try {
+      const parsed = JSON.parse(options);
+      return Array.isArray(parsed) ? parsed : [options];
+    } catch {
+      if (options.includes(',')) {
+        return options.split(',').map(s => s.trim());
+      }
+      return [options];
+    }
+  }
+  return [];
+};
+
+// Get questions by topic (App & Web)
 app.get('/api/topics/:id/questions', (req, res) => {
   const { id } = req.params;
   db.all("SELECT * FROM questions WHERE topic_id = ?", [id], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Parse options JSON
-    const parsed = rows.map(r => ({
+    const parsed = (rows || []).map(r => ({
       ...r,
-      options: r.options ? JSON.parse(r.options) : []
+      options: parseQuestionOptions(r.options)
     }));
     res.json(parsed);
   });
 });
 
+// Get all questions with filters for Admin Web
+app.get('/api/questions', (req, res) => {
+  const { topic_id, subject_id } = req.query;
+  let query = `
+    SELECT q.*, t.name as topic_name, s.name as subject_name
+    FROM questions q
+    LEFT JOIN topics t ON q.topic_id = t.id
+    LEFT JOIN subjects s ON q.subject_id = s.id
+  `;
+  const params = [];
+  if (topic_id) {
+    query += ' WHERE q.topic_id = ?';
+    params.push(topic_id);
+  } else if (subject_id) {
+    query += ' WHERE q.subject_id = ?';
+    params.push(subject_id);
+  }
+  query += ' ORDER BY q.id DESC';
+
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const parsed = (rows || []).map(r => ({
+      ...r,
+      options: parseQuestionOptions(r.options)
+    }));
+    res.json(parsed);
+  });
+});
+
+// Get single question by ID
+app.get('/api/questions/:id', (req, res) => {
+  const { id } = req.params;
+  db.get("SELECT * FROM questions WHERE id = ?", [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: "Question not found" });
+    res.json({
+      ...row,
+      options: parseQuestionOptions(row.options)
+    });
+  });
+});
+
+// Create question (Admin & Contributors)
 app.post('/api/questions', authenticateToken, (req, res) => {
   const { subject_id, topic_id, question_text, options, correct_answer, explanation } = req.body;
+  if (!question_text) return res.status(400).json({ error: "Question text is required" });
+
+  const serializedOptions = typeof options === 'object' ? JSON.stringify(options) : String(options || '[]');
+
   db.run("INSERT INTO questions (subject_id, topic_id, question_text, options, correct_answer, explanation) VALUES (?, ?, ?, ?, ?, ?)",
-    [subject_id, topic_id, question_text, options, correct_answer, explanation], function (err) {
+    [subject_id || null, topic_id || null, question_text, serializedOptions, correct_answer !== undefined ? String(correct_answer) : '0', explanation || ''], function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ id: this.lastID, success: true });
     });
 });
 
+// Update question (Admin Web)
+app.put('/api/questions/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const { subject_id, topic_id, question_text, options, correct_answer, explanation } = req.body;
+
+  const serializedOptions = typeof options === 'object' ? JSON.stringify(options) : String(options || '[]');
+
+  db.run(
+    "UPDATE questions SET subject_id = ?, topic_id = ?, question_text = ?, options = ?, correct_answer = ?, explanation = ? WHERE id = ?",
+    [subject_id || null, topic_id || null, question_text, serializedOptions, correct_answer !== undefined ? String(correct_answer) : '0', explanation || '', id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, updated: this.changes });
+    }
+  );
+});
+
+// Delete question
 app.delete('/api/questions/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   db.run("DELETE FROM questions WHERE id = ?", [id], (err) => {
@@ -1005,6 +1087,7 @@ app.delete('/api/questions/:id', authenticateToken, (req, res) => {
     res.json({ success: true });
   });
 });
+
 
 // 21. Forum Management (Protected)
 app.delete('/api/forum/posts/:id', authenticateToken, requireAdmin, (req, res) => {
