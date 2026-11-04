@@ -254,6 +254,26 @@ const initDb = async () => {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
         )`,
+        `CREATE TABLE IF NOT EXISTS questions (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+          subject_id INT,
+          topic_id INT,
+          question_text TEXT NOT NULL,
+          options TEXT NOT NULL,
+          correct_answer VARCHAR(255) NOT NULL,
+          explanation TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
+        )`,
+        `CREATE TABLE IF NOT EXISTS mistakes_log (
+          id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+          user_id INT,
+          subject_id INT,
+          question_id INT,
+          user_answer VARCHAR(255),
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+          ${DB_TYPE === 'mysql' ? ', PRIMARY KEY (id)' : ''}
+        )`,
         `CREATE TABLE IF NOT EXISTS account_deletion_requests (
           id ${DB_TYPE === 'mysql' ? 'INT AUTO_INCREMENT' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
           user_id INT,
@@ -276,7 +296,8 @@ const initDb = async () => {
         `CREATE INDEX IF NOT EXISTS idx_modules_subject_id ON modules(subject_id)`,
         `CREATE INDEX IF NOT EXISTS idx_topics_module_id ON topics(module_id)`,
         `CREATE INDEX IF NOT EXISTS idx_contributions_subject ON contributions(subject)`,
-        `CREATE INDEX IF NOT EXISTS idx_contributions_status ON contributions(status)`
+        `CREATE INDEX IF NOT EXISTS idx_contributions_status ON contributions(status)`,
+        `CREATE INDEX IF NOT EXISTS idx_questions_topic_id ON questions(topic_id)`
       ];
 
       for (const sql of indexQueries) {
