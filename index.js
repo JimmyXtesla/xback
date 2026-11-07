@@ -313,6 +313,7 @@ app.post('/api/study/activity', authenticateToken, (req, res) => {
 
 // 1. Subjects
 app.get('/api/subjects', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
   const { form_level } = req.query;
   let baseQuery = `
     SELECT 
@@ -341,6 +342,7 @@ app.get('/api/subjects', (req, res) => {
 
 // 1.1 Get unique Form Levels
 app.get('/api/forms', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=1200');
   const query = `
     SELECT DISTINCT form_level FROM subjects WHERE form_level IS NOT NULL AND form_level != ""
     UNION
@@ -501,6 +503,7 @@ app.post('/api/notifications/send', authenticateToken, async (req, res) => {
 
 // 8. Past Papers (with optional form_level filter)
 app.get('/api/papers', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
   const { form_level } = req.query;
   let query = 'SELECT * FROM papers';
   const params = [];
@@ -644,6 +647,7 @@ app.get('/api/progress/:userId/subject/:subjectId', (req, res) => {
 
 // 8. Papers CRUD
 app.get('/api/papers', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
   const { form_level } = req.query;
   let query = 'SELECT * FROM papers';
   const params = [];
@@ -753,9 +757,9 @@ app.post('/api/auth/login', [
   body('password').exists()
 ], (req, res) => {
   let { email, password } = req.body;
-  email = email.trim();
+  email = (email || '').trim().toLowerCase();
 
-  db.get("SELECT * FROM users WHERE email = ?", [email], async (err, user) => {
+  db.get("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", [email], async (err, user) => {
 
     if (!user) {
       console.log(`[DEBUG] User not found: ${email}`);
@@ -919,12 +923,27 @@ app.get('/api/transactions', (req, res) => {
   });
 });
 
-// 12. Real Dynamic Analytics
+// --- In-Memory Micro-Cache for High-Load Endpoints ---
+let analyticsCache = {
+  data: null,
+  timestamp: 0
+};
+const ANALYTICS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes RAM cache (protects database)
+
+// 12. Real Dynamic Analytics & Engagement (Cached for 30 Minutes)
 app.get('/api/analytics', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300, s-maxage=1800, stale-while-revalidate=3600');
 
-
-
-  });
+  const forceRefresh = req.query.force === 'true';
+  const nowTime = Date.now();
+  if (!forceRefresh && analyticsCache.data && (nowTime - analyticsCache.timestamp) < ANALYTICS_CACHE_TTL_MS) {
+    const remainingSeconds = Math.max(0, Math.round((ANALYTICS_CACHE_TTL_MS - (nowTime - analyticsCache.timestamp)) / 1000));
+    return res.json({
+      ...analyticsCache.data,
+      isCached: true,
+      remainingMinutes: Math.ceil(remainingSeconds / 60)
+    });
+  }
 
   const queryAsync = (sql, params = []) => new Promise((resolve) => {
     db.all(sql, params, (err, rows) => {
@@ -1018,7 +1037,7 @@ app.get('/api/analytics', (req, res) => {
       }
     ];
 
-    res.json({
+    const payload = {
       metrics,
       dailyEngagement,
       engagement: dailyEngagement.map(d => d.count),
@@ -1030,11 +1049,137 @@ app.get('/api/analytics', (req, res) => {
         totalQuestions: questions.length,
         forumPosts: posts.length,
         forumComments: comments.length
-      }
-    });
+      },
+      snapshotTime: new Date().toISOString(),
+      remainingMinutes: 30
+    };
+
+    // Store in RAM cache for 30 minutes
+    analyticsCache = {
+      data: payload,
+      timestamp: Date.now()
+    };
+
+    res.json(payload);
   }).catch(err => {
     res.status(500).json({ error: err.message });
   });
+});
+
+
+
+
+
+
+/* DEAD_BLOCK_START
+//     db.all(sql, params, (err, rows) => {
+//       if (err) {
+//         console.warn('[ANALYTICS_QUERY_WARN]', sql, err.message);
+//         resolve([]);
+//       } else {
+//         resolve(rows || []);
+//       }
+//     });
+
+
+//   Promise.all([
+//     queryAsync("SELECT id, xp, streak, created_at, last_activity_date FROM users"),
+//     queryAsync("SELECT completed, score, last_accessed, topic_id, user_id FROM progress"),
+//     queryAsync("SELECT id, views, likes, created_at FROM posts"),
+//     queryAsync("SELECT id FROM comments"),
+//     queryAsync("SELECT id FROM questions"),
+//     queryAsync("SELECT id, name FROM subjects"),
+//     queryAsync(`
+//       SELECT p.last_accessed, u.name as user_name, t.name as topic_name, p.score, p.completed 
+//       FROM progress p 
+//       JOIN users u ON p.user_id = u.id 
+//       JOIN topics t ON p.topic_id = t.id 
+//       ORDER BY p.last_accessed DESC LIMIT 7
+//     `)
+//   ]).then(([users, progress, posts, comments, questions, subjects, recentActivity]) => {
+//     const now = new Date();
+//     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+//     const activeUsersThisWeek = users.filter(u => {
+//       if (u.last_activity_date && new Date(u.last_activity_date) >= sevenDaysAgo) return true;
+//       if (u.created_at && new Date(u.created_at) >= sevenDaysAgo) return true;
+//       return false;
+//     }).length;
+
+//     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+//     const dailyEngagement = [];
+//     for (let i = 6; i >= 0; i--) {
+//       const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+//       const dateStr = d.toISOString().slice(0, 10);
+//       const dayName = days[d.getDay()];
+
+//       const count = progress.filter(p => p.last_accessed && String(p.last_accessed).slice(0, 10) === dateStr).length;
+//       dailyEngagement.push({
+//         date: dateStr,
+//         day: dayName,
+//         count: count
+//       });
+//     }
+
+//     const completedProgress = progress.filter(p => p.completed === 1 || p.completed === true);
+//     const scoredQuizzes = progress.filter(p => p.score > 0);
+//     const avgScore = scoredQuizzes.length > 0
+//       ? Math.round(scoredQuizzes.reduce((acc, p) => acc + Number(p.score || 0), 0) / scoredQuizzes.length)
+//       : 0;
+
+//     const totalViews = posts.reduce((acc, p) => acc + Number(p.views || 0), 0);
+//     const totalLikes = posts.reduce((acc, p) => acc + Number(p.likes || 0), 0);
+
+//     const metrics = [
+//       {
+//         metric_name: 'Total Students',
+//         value: users.length,
+//         change_text: `+${users.filter(u => u.created_at && new Date(u.created_at) >= sevenDaysAgo).length} joined this week`
+//       },
+//       {
+//         metric_name: 'Active Learners',
+//         value: Math.max(activeUsersThisWeek, 1),
+//         change_text: `${Math.round(((activeUsersThisWeek || 1) / Math.max(users.length, 1)) * 100)}% active rate`
+//       },
+//       {
+//         metric_name: 'Lessons & Quizzes Completed',
+//         value: completedProgress.length,
+//         change_text: `${progress.length} total attempts`
+//       },
+//       {
+//         metric_name: 'Forum Engagement',
+//         value: posts.length + comments.length,
+//         change_text: `${totalViews} views • ${totalLikes} likes`
+//       },
+//       {
+//         metric_name: 'Average Quiz Score',
+//         value: `${avgScore}%`,
+//         change_text: `${scoredQuizzes.length} quiz submissions`
+//       },
+//       {
+//         metric_name: 'Question Bank Size',
+//         value: questions.length,
+//         change_text: `${subjects.length} subjects covered`
+//       }
+//     ];
+
+//     res.json({
+//       metrics,
+//       dailyEngagement,
+//       engagement: dailyEngagement.map(d => d.count),
+//       recentActivity,
+//       summary: {
+//         totalUsers: users.length,
+//         activeThisWeek: activeUsersThisWeek,
+//         completedLessons: completedProgress.length,
+//         totalQuestions: questions.length,
+//         forumPosts: posts.length,
+//         forumComments: comments.length
+//       }
+//     });
+//   }).catch(err => {
+DEAD_BLOCK_END */
+
 
 
 
@@ -1115,6 +1260,7 @@ const parseQuestionOptions = (options) => {
 
 // Get questions by topic (App & Web)
 app.get('/api/topics/:id/questions', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
   const { id } = req.params;
   db.all("SELECT * FROM questions WHERE topic_id = ?", [id], (err, rows) => {
 
