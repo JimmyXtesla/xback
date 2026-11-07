@@ -17,8 +17,11 @@ if (DB_TYPE === 'mysql') {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'slide',
     waitForConnections: true,
-    connectionLimit: 100,
-    queueLimit: 0
+    connectionLimit: 10, // Safe connection limit for Vercel serverless + Hostinger
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    connectTimeout: 10000
   });
 
   const promisePool = pool.promise();
