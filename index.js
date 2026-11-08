@@ -21,6 +21,7 @@ initDb().then(() => {
 });
 
 // Security Middleware
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors());
 app.use(morgan('dev'));
@@ -30,7 +31,8 @@ app.use(express.json());
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'development' ? 5000 : 100, // higher limit in dev mode
-  message: 'Too many requests from this IP, please try again after 15 minutes'
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+  validate: false
 });
 app.use('/api/', limiter);
 
