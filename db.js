@@ -332,7 +332,10 @@ const initDb = async () => {
         "ALTER TABLE users ADD COLUMN push_token VARCHAR(255)",
         "ALTER TABLE users ADD COLUMN age INT",
         "ALTER TABLE users ADD COLUMN guardian_consent BOOLEAN DEFAULT 0",
-        "ALTER TABLE papers ADD COLUMN pdf_url VARCHAR(1000)"
+        "ALTER TABLE papers ADD COLUMN pdf_url VARCHAR(1000)",
+        "ALTER TABLE topics ADD COLUMN image_url TEXT",
+        "ALTER TABLE topics ADD COLUMN cover_image TEXT",
+        "ALTER TABLE topics ADD COLUMN images TEXT"
       ];
 
       for (const sql of migrations) {
